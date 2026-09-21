@@ -1,0 +1,6 @@
+vendor_name,transaction_date,item_description,agreed_price,actual_price,agreed_delivery_date,actual_delivery_date,quantity_ordered,quantity_received
+abc,2026-01-10,Vendor ID is text not a number,100.00,,2026-01-20,,10,
+2.5,2026-01-15,Vendor ID is a decimal not an integer,150.00,,2026-01-25,,5,
+Gamuda Berhad,2026-01-20,Price is text not a number,not-a-price,,2026-01-30,,8,
+Gamuda Berhad,2026-01-25,Quantity is negative,200.00,,2026-02-05,,-10,
+Gamuda Berhad,31/02/2026,Impossible calendar date,175.00,,2026-02-15,,12,

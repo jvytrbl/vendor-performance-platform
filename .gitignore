@@ -30,8 +30,18 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+
+.cursor/skills/banner-design/
+.cursor/skills/brand/
+.cursor/skills/design/
+.cursor/skills/design-system/
+.cursor/skills/slides/
+.cursor/skills/ui-styling/
+.cursor/skills/ui-ux-pro-max/
+
 # env files (can opt-in for committing if needed)
 .env*
+.env*.local
 
 # vercel
 .vercel

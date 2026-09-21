@@ -1,0 +1,6 @@
+vendor_name,transaction_date,item_description,agreed_price,actual_price,agreed_delivery_date,actual_delivery_date,quantity_ordered,quantity_received
+Gamuda Berhad,2026-01-10,<script>alert(1)</script>,100.00,,2026-01-20,,10,
+Gamuda Land,2026-01-15,Normal item with <b>html tags</b> embedded,200.00,,2026-01-25,,5,
+Gamuda Berhad,2026-02-01,"Item with a comma, inside quotes",300.00,,2026-02-10,,15,
+Gamuda Land,2026-02-15,Item with "escaped quotes" inline,150.00,,2026-02-25,,8,
+Gamuda Berhad,2026-03-01,Robert'); DROP TABLE VENDOR_TRANSACTIONS;--,400.00,,2026-03-10,,20,

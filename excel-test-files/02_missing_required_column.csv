@@ -1,0 +1,3 @@
+vendor_name,transaction_date,item_description,actual_price,agreed_delivery_date,actual_delivery_date,quantity_ordered,quantity_received
+Gamuda Berhad,2026-01-10,Steel beams batch A,15000.00,2026-01-20,2026-01-19,50,50
+Gamuda Land,2026-01-15,Site excavation service,22000.00,2026-01-25,2026-01-28,1,1

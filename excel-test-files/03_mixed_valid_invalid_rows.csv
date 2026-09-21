@@ -1,0 +1,9 @@
+vendor_name,transaction_date,item_description,agreed_price,actual_price,agreed_delivery_date,actual_delivery_date,quantity_ordered,quantity_received
+Gamuda Berhad,2026-01-10,Steel beams batch A,15000.00,15000.00,2026-01-20,2026-01-19,50,50
+Gamuda Berhad,2026-02-05,,8500.50,8500.50,2026-02-12,2026-02-12,200,200
+Zenith Logistics Sdn Bhd,2026-01-15,Site excavation service,22000.00,22000.00,2026-01-25,2026-01-28,1,1
+Gamuda Land,2026-03-01,Landscaping materials,-500.00,,2026-03-10,,75,
+Gamuda Land,2026-03-15,Fencing installation,3200.00,3200.00,2026-03-05,,40,40
+Gamuda Berhad,2026-04-01,Roofing sheets,6100.00,6100.00,2026-04-10,2026-04-08,90,90
+Trisystem Engineering Sdn Bhd,not-a-date,Cabling service,1800.00,,2026-05-01,,10,
+Gamuda Berhad,2026-05-15,Paint supplies,950.25,950.25,2026-05-20,2026-05-19,120,120

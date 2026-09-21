@@ -1,0 +1,6 @@
+vendor_name,transaction_date,item_description,agreed_price,actual_price,agreed_delivery_date,actual_delivery_date,quantity_ordered,quantity_received
+Gamuda Berhad,2026-01-10,Steel beams batch A,15000.00,15000.00,2026-01-20,2026-01-19,50,50
+Gamuda Berhad,2026-02-05,Concrete mix delivery,8500.50,8500.50,2026-02-12,2026-02-12,200,200
+Gamuda Land,2026-01-15,Site excavation service,22000.00,22000.00,2026-01-25,2026-01-28,1,1
+Gamuda Land,2026-03-01,Landscaping materials,4300.00,,2026-03-10,,75,
+Gamuda Berhad,2026-03-20,Electrical wiring bulk,12750.75,12900.00,2026-03-30,2026-04-02,300,295
