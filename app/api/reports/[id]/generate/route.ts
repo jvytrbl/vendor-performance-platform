@@ -4,7 +4,23 @@ import { getReportById, saveGeneratedReport } from "@/lib/repositories/reports";
 import { getTransactionsForPeriod } from "@/lib/repositories/transactions";
 import { getPriorPeriod } from "../../../../../lib/domain/reports/getPriorPeriod";
 import { runReportGeneration } from "../../../../../lib/domain/reports/runReportGeneration";
-import { geminiGenerateContent } from "../../../../../lib/ai/geminiGenerateContent";
+import { geminiGenerateContent, RateLimitError } from "../../../../../lib/ai/geminiGenerateContent";
+import { withRetry } from "../../../../../lib/ai/withRetry";
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generateContentWithRetry(prompt: string, apiKey: string): Promise<string> {
+  const result = await withRetry(() => geminiGenerateContent(prompt, apiKey), {
+    isRetryable: (error) => error instanceof RateLimitError,
+    wait,
+  });
+  if (!result.ok) {
+    throw new Error("AI generation temporarily unavailable after retries");
+  }
+  return result.value;
+}
 
 function parseReportId(id: string): number | null {
   const reportId = Number(id);
@@ -87,7 +103,7 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
       priorPeriod,
       currentTxs,
       priorTxs,
-      generateContent: (prompt) => geminiGenerateContent(prompt, apiKey),
+      generateContent: (prompt) => generateContentWithRetry(prompt, apiKey),
     });
 
     if (!result.ok) {

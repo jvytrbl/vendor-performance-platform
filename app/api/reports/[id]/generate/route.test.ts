@@ -3,7 +3,10 @@ import { POST } from "./route";
 import { validateAuthHeader } from "../../../../../lib/auth";
 import { getReportById, saveGeneratedReport } from "@/lib/repositories/reports";
 import { getTransactionsForPeriod } from "@/lib/repositories/transactions";
-import { geminiGenerateContent } from "../../../../../lib/ai/geminiGenerateContent";
+import {
+  geminiGenerateContent,
+  RateLimitError,
+} from "../../../../../lib/ai/geminiGenerateContent";
 
 vi.mock("../../../../../lib/auth", () => ({
   validateAuthHeader: vi.fn(),
@@ -18,9 +21,13 @@ vi.mock("@/lib/repositories/transactions", () => ({
   getTransactionsForPeriod: vi.fn(),
 }));
 
-vi.mock("../../../../../lib/ai/geminiGenerateContent", () => ({
-  geminiGenerateContent: vi.fn(),
-}));
+vi.mock("../../../../../lib/ai/geminiGenerateContent", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../../../lib/ai/geminiGenerateContent")>();
+  return {
+    ...actual,
+    geminiGenerateContent: vi.fn(),
+  };
+});
 
 const draft = {
   id: 7,
@@ -152,5 +159,75 @@ describe("POST /api/reports/:id/generate", () => {
     expect(saveGeneratedReport).toHaveBeenCalledOnce();
     expect(response.status).toBe(200);
     expect(body.data.vendor_summary).toBe("On-time delivery was 100.");
+  });
+
+  it("retries on 429 and still saves once Gemini succeeds within the retry budget", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
+        if (dateFrom === "2026-01-01") return [currentTx] as any;
+        return [];
+      });
+      vi.mocked(geminiGenerateContent)
+        .mockRejectedValueOnce(new RateLimitError())
+        .mockResolvedValue("On-time delivery was 100.");
+      vi.mocked(saveGeneratedReport).mockResolvedValue();
+      vi.mocked(getReportById)
+        .mockResolvedValueOnce(draft as any)
+        .mockResolvedValueOnce({
+          ...draft,
+          vendor_summary: "On-time delivery was 100.",
+        } as any);
+
+      const responsePromise = POST(
+        new Request("http://localhost/api/reports/7/generate", {
+          method: "POST",
+          headers: { Authorization: "Bearer good.token" },
+        }),
+        { params: Promise.resolve({ id: "7" }) }
+      );
+
+      await vi.advanceTimersByTimeAsync(1000);
+      const response = await responsePromise;
+      const body = await response.json();
+
+      expect(geminiGenerateContent).toHaveBeenCalledTimes(2);
+      expect(saveGeneratedReport).toHaveBeenCalledOnce();
+      expect(response.status).toBe(200);
+      expect(body.data.vendor_summary).toBe("On-time delivery was 100.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns 503 AI_UNAVAILABLE after exhausting all 3 retry attempts on repeated 429s", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(getReportById).mockResolvedValue(draft as any);
+      vi.mocked(getTransactionsForPeriod).mockResolvedValue([currentTx] as any);
+      vi.mocked(geminiGenerateContent).mockRejectedValue(new RateLimitError());
+
+      const responsePromise = POST(
+        new Request("http://localhost/api/reports/7/generate", {
+          method: "POST",
+          headers: { Authorization: "Bearer good.token" },
+        }),
+        { params: Promise.resolve({ id: "7" }) }
+      );
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(2000);
+      const response = await responsePromise;
+      const body = await response.json();
+
+      expect(geminiGenerateContent).toHaveBeenCalledTimes(3);
+      expect(saveGeneratedReport).not.toHaveBeenCalled();
+      expect(response.status).toBe(503);
+      expect(body.code).toBe("AI_UNAVAILABLE");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

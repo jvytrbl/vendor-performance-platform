@@ -1,5 +1,14 @@
 const GEMINI_MODEL = "gemini-3.8-flash";
 
+export class RateLimitError extends Error {
+  readonly status = 429;
+
+  constructor() {
+    super("Gemini request failed with status 429");
+    this.name = "RateLimitError";
+  }
+}
+
 export async function geminiGenerateContent(
   prompt: string,
   apiKey: string
@@ -15,6 +24,9 @@ export async function geminiGenerateContent(
   });
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new RateLimitError();
+    }
     throw new Error(`Gemini request failed with status ${response.status}`);
   }
 
