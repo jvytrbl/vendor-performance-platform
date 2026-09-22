@@ -7,6 +7,7 @@ import {
   type BulkUploadRowError,
 } from "@/lib/api/transactions";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
+import LoadingIndicator from "@/components/ui/LoadingIndicator";
 
 interface UploadSummary {
   inserted: number;
@@ -83,6 +84,8 @@ export default function BulkUploadForm() {
         </div>
 
         {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+
+        {isUploading && <LoadingIndicator label="Processing the file…" />}
 
         <button
           type="submit"
