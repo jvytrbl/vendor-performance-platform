@@ -14,17 +14,20 @@
     "@azure/keyvault-secrets": "^4.11.2",
     "@azure/msal-browser": "^5.21.0",
     "@azure/msal-react": "^5.7.0",
+    "docx": "^9.7.1",
     "exceljs": "^4.4.0",
     "jose": "^6.2.12",
     "mssql": "^12.7.0",
     "natural": "^8.1.1",
     "next": "16.3.4",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/exceljs": "^0.5.3",
     "@types/mssql": "^12.3.0",
     "@types/node": "^20",
@@ -34,6 +37,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "jsdom": "^30.0.1",
+    "jszip": "^3.10.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^2.1.9"

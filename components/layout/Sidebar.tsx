@@ -13,7 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", enabled: false },
   { label: "Vendors", href: "/vendors", enabled: true },
   { label: "Transactions", href: "/transactions", enabled: true },
-  { label: "Reports", href: "/reports", enabled: false },
+  { label: "Reports", href: "/reports", enabled: true },
 ];
 
 interface SidebarProps {

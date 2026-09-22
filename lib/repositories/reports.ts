@@ -202,6 +202,32 @@ export async function finalizeReport(
   return result.recordset[0] ?? null;
 }
 
+export async function tryStartGeneration(id: number): Promise<boolean> {
+  const pool = await getDbPool();
+  const result = await pool
+    .request()
+    .input("id", id)
+    .query(
+      `UPDATE VENDOR_PERFORMANCE_REPORTS
+       SET generation_status = 'InProgress'
+       WHERE id = @id AND (generation_status IS NULL OR generation_status <> 'InProgress')`
+    );
+
+  return (result.rowsAffected[0] ?? 0) > 0;
+}
+
+export async function clearGenerationStatus(id: number): Promise<void> {
+  const pool = await getDbPool();
+  await pool
+    .request()
+    .input("id", id)
+    .query(
+      `UPDATE VENDOR_PERFORMANCE_REPORTS
+       SET generation_status = NULL
+       WHERE id = @id`
+    );
+}
+
 export async function saveGeneratedReport(
   id: number,
   sections: ReportSectionInput,

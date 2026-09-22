@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "./route";
 import { validateAuthHeader } from "../../../../../lib/auth";
-import { getReportById, saveGeneratedReport } from "@/lib/repositories/reports";
+import {
+  getReportById,
+  saveGeneratedReport,
+  tryStartGeneration,
+  clearGenerationStatus,
+} from "@/lib/repositories/reports";
 import { getTransactionsForPeriod } from "@/lib/repositories/transactions";
 import {
   geminiGenerateContent,
@@ -15,6 +20,8 @@ vi.mock("../../../../../lib/auth", () => ({
 vi.mock("@/lib/repositories/reports", () => ({
   getReportById: vi.fn(),
   saveGeneratedReport: vi.fn(),
+  tryStartGeneration: vi.fn(),
+  clearGenerationStatus: vi.fn(),
 }));
 
 vi.mock("@/lib/repositories/transactions", () => ({
@@ -62,6 +69,8 @@ describe("POST /api/reports/:id/generate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.GEMINI_API_KEY = "test-key";
+    vi.mocked(tryStartGeneration).mockResolvedValue(true);
+    vi.mocked(clearGenerationStatus).mockResolvedValue();
   });
 
   it("returns 401 when the request is not authenticated", async () => {
@@ -229,5 +238,73 @@ describe("POST /api/reports/:id/generate", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Category 7 (concurrency), NFR-012: a second /generate call for the same
+  // report while one is already in progress must be rejected, not queued.
+  it("returns 409 GENERATION_IN_PROGRESS when generation is already in progress for this report", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(getReportById).mockResolvedValue(draft as any);
+    vi.mocked(tryStartGeneration).mockResolvedValue(false);
+
+    const response = await POST(
+      new Request("http://localhost/api/reports/7/generate", {
+        method: "POST",
+        headers: { Authorization: "Bearer good.token" },
+      }),
+      { params: Promise.resolve({ id: "7" }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.code).toBe("GENERATION_IN_PROGRESS");
+    expect(geminiGenerateContent).not.toHaveBeenCalled();
+    expect(saveGeneratedReport).not.toHaveBeenCalled();
+    expect(clearGenerationStatus).not.toHaveBeenCalled();
+  });
+
+  it("releases the generation claim after a successful generation", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
+      if (dateFrom === "2026-01-01") return [currentTx] as any;
+      return [];
+    });
+    vi.mocked(geminiGenerateContent).mockResolvedValue("On-time delivery was 100.");
+    vi.mocked(saveGeneratedReport).mockResolvedValue();
+    vi.mocked(getReportById)
+      .mockResolvedValueOnce(draft as any)
+      .mockResolvedValueOnce({
+        ...draft,
+        vendor_summary: "On-time delivery was 100.",
+      } as any);
+
+    const response = await POST(
+      new Request("http://localhost/api/reports/7/generate", {
+        method: "POST",
+        headers: { Authorization: "Bearer good.token" },
+      }),
+      { params: Promise.resolve({ id: "7" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(clearGenerationStatus).toHaveBeenCalledWith(7);
+  });
+
+  it("releases the generation claim even when generation fails validation", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(getReportById).mockResolvedValue(draft as any);
+    vi.mocked(getTransactionsForPeriod).mockResolvedValue([currentTx] as any);
+    vi.mocked(geminiGenerateContent).mockResolvedValue("Delay was 9 days.");
+
+    const response = await POST(
+      new Request("http://localhost/api/reports/7/generate", {
+        method: "POST",
+        headers: { Authorization: "Bearer good.token" },
+      }),
+      { params: Promise.resolve({ id: "7" }) }
+    );
+
+    expect(response.status).toBe(422);
+    expect(clearGenerationStatus).toHaveBeenCalledWith(7);
   });
 });

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "../../../../../lib/withAuth";
-import { getReportById, saveGeneratedReport } from "@/lib/repositories/reports";
+import {
+  getReportById,
+  saveGeneratedReport,
+  tryStartGeneration,
+  clearGenerationStatus,
+} from "@/lib/repositories/reports";
 import { getTransactionsForPeriod } from "@/lib/repositories/transactions";
 import { getPriorPeriod } from "../../../../../lib/domain/reports/getPriorPeriod";
 import { runReportGeneration } from "../../../../../lib/domain/reports/runReportGeneration";
@@ -72,68 +77,83 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const claimed = await tryStartGeneration(reportId);
+    if (!claimed) {
       return NextResponse.json(
-        { error: "AI generation failed; nothing was saved", code: "AI_UNAVAILABLE" },
-        { status: 503 }
-      );
-    }
-
-    const currentPeriod = {
-      periodStart: toIsoDate(existing.period_start),
-      periodEnd: toIsoDate(existing.period_end),
-    };
-    const priorPeriod = getPriorPeriod(currentPeriod);
-
-    const currentTxs = await getTransactionsForPeriod(
-      existing.vendor_ids,
-      currentPeriod.periodStart,
-      currentPeriod.periodEnd
-    );
-    const priorTxs = await getTransactionsForPeriod(
-      existing.vendor_ids,
-      priorPeriod.periodStart,
-      priorPeriod.periodEnd
-    );
-
-    const result = await runReportGeneration({
-      vendorIds: existing.vendor_ids,
-      currentPeriod,
-      priorPeriod,
-      currentTxs,
-      priorTxs,
-      generateContent: (prompt) => generateContentWithRetry(prompt, apiKey),
-    });
-
-    if (!result.ok) {
-      const status = result.code === "AI_UNAVAILABLE" ? 503 : 422;
-      return NextResponse.json(
-        { error: result.error, code: result.code },
-        { status }
+        {
+          error: "Generation is already in progress for this report",
+          code: "GENERATION_IN_PROGRESS",
+        },
+        { status: 409 }
       );
     }
 
     try {
-      await saveGeneratedReport(reportId, result.sections, result.metrics);
-    } catch (error: unknown) {
-      const sqlNumber =
-        typeof error === "object" && error !== null && "number" in error
-          ? (error as { number: number }).number
-          : undefined;
-      if (sqlNumber === 2627) {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
         return NextResponse.json(
-          {
-            error: "Metrics already exist for this report",
-            code: "DUPLICATE_METRICS",
-          },
-          { status: 409 }
+          { error: "AI generation failed; nothing was saved", code: "AI_UNAVAILABLE" },
+          { status: 503 }
         );
       }
-      throw error;
-    }
 
-    const saved = await getReportById(reportId);
-    return NextResponse.json({ data: saved });
+      const currentPeriod = {
+        periodStart: toIsoDate(existing.period_start),
+        periodEnd: toIsoDate(existing.period_end),
+      };
+      const priorPeriod = getPriorPeriod(currentPeriod);
+
+      const currentTxs = await getTransactionsForPeriod(
+        existing.vendor_ids,
+        currentPeriod.periodStart,
+        currentPeriod.periodEnd
+      );
+      const priorTxs = await getTransactionsForPeriod(
+        existing.vendor_ids,
+        priorPeriod.periodStart,
+        priorPeriod.periodEnd
+      );
+
+      const result = await runReportGeneration({
+        vendorIds: existing.vendor_ids,
+        currentPeriod,
+        priorPeriod,
+        currentTxs,
+        priorTxs,
+        generateContent: (prompt) => generateContentWithRetry(prompt, apiKey),
+      });
+
+      if (!result.ok) {
+        const status = result.code === "AI_UNAVAILABLE" ? 503 : 422;
+        return NextResponse.json(
+          { error: result.error, code: result.code },
+          { status }
+        );
+      }
+
+      try {
+        await saveGeneratedReport(reportId, result.sections, result.metrics);
+      } catch (error: unknown) {
+        const sqlNumber =
+          typeof error === "object" && error !== null && "number" in error
+            ? (error as { number: number }).number
+            : undefined;
+        if (sqlNumber === 2627) {
+          return NextResponse.json(
+            {
+              error: "Metrics already exist for this report",
+              code: "DUPLICATE_METRICS",
+            },
+            { status: 409 }
+          );
+        }
+        throw error;
+      }
+
+      const saved = await getReportById(reportId);
+      return NextResponse.json({ data: saved });
+    } finally {
+      await clearGenerationStatus(reportId);
+    }
   }
 );

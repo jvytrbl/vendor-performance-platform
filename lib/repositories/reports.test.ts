@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { insertReport, getReports, getReportById, updateReportSections, deleteReport, finalizeReport, saveGeneratedReport } from "./reports";
+import { insertReport, getReports, getReportById, updateReportSections, deleteReport, finalizeReport, saveGeneratedReport, tryStartGeneration, clearGenerationStatus } from "./reports";
 import { getDbPool } from "@/lib/db";
 
 vi.mock("@/lib/db", () => ({
@@ -274,5 +274,60 @@ describe("saveGeneratedReport", () => {
         call[0].includes("INSERT INTO VENDOR_PERFORMANCE_METRICS")
       )
     ).toBe(true);
+  });
+});
+
+describe("tryStartGeneration", () => {
+  // Category 7 (concurrency): the claim must be one atomic UPDATE whose
+  // WHERE clause re-checks generation_status in the same statement as the
+  // write, so two concurrent calls can't both read "idle" before either
+  // writes "InProgress".
+  it("claims the report and returns true when generation_status is idle (NULL or not InProgress)", async () => {
+    const mockRequest: any = {};
+    mockRequest.input = vi.fn().mockReturnValue(mockRequest);
+    mockRequest.query = vi.fn().mockResolvedValue({ rowsAffected: [1] });
+    vi.mocked(getDbPool).mockResolvedValue({
+      request: () => mockRequest,
+    } as any);
+
+    const result = await tryStartGeneration(7);
+
+    expect(mockRequest.input).toHaveBeenCalledWith("id", 7);
+    const sql = mockRequest.query.mock.calls[0][0] as string;
+    expect(sql).toContain("SET generation_status = 'InProgress'");
+    expect(sql).toContain("WHERE id = @id");
+    expect(sql).toContain("generation_status IS NULL OR generation_status <> 'InProgress'");
+    expect(result).toBe(true);
+  });
+
+  it("returns false without claiming when another request already has it InProgress", async () => {
+    const mockRequest: any = {};
+    mockRequest.input = vi.fn().mockReturnValue(mockRequest);
+    mockRequest.query = vi.fn().mockResolvedValue({ rowsAffected: [0] });
+    vi.mocked(getDbPool).mockResolvedValue({
+      request: () => mockRequest,
+    } as any);
+
+    const result = await tryStartGeneration(7);
+
+    expect(result).toBe(false);
+  });
+});
+
+describe("clearGenerationStatus", () => {
+  it("resets generation_status back to idle (NULL)", async () => {
+    const mockRequest: any = {};
+    mockRequest.input = vi.fn().mockReturnValue(mockRequest);
+    mockRequest.query = vi.fn().mockResolvedValue({ rowsAffected: [1] });
+    vi.mocked(getDbPool).mockResolvedValue({
+      request: () => mockRequest,
+    } as any);
+
+    await clearGenerationStatus(7);
+
+    expect(mockRequest.input).toHaveBeenCalledWith("id", 7);
+    const sql = mockRequest.query.mock.calls[0][0] as string;
+    expect(sql).toContain("SET generation_status = NULL");
+    expect(sql).toContain("WHERE id = @id");
   });
 });
