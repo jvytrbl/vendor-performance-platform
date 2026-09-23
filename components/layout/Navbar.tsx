@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import SignInButton from "@/components/auth/SignInButton";
 
@@ -32,17 +33,28 @@ export default function Navbar({ collapsed, menuOpen, onMenu }: NavbarProps) {
         }
       >
         {collapsed ? (
-          <span className="font-display text-xl font-medium text-foreground" title="Vendor Performance Platform">
-            VP
-          </span>
+          <Image
+            src="/vpp_logo.svg"
+            alt="Vendor Performance Platform"
+            title="Vendor Performance Platform"
+            width={48}
+            height={48}
+            className="h-12 w-12"
+          />
         ) : (
-          <span className="font-display text-xl font-medium leading-tight text-foreground" title="Vendor Performance Platform">
-            Vendor Performance
+          <span className="flex items-center gap-2">
+            <Image src="/vpp_logo.svg" alt="" width={48} height={48} className="h-12 w-12 shrink-0" />
+            <span className="font-display text-base font-medium leading-tight text-foreground" title="Vendor Performance Platform">
+              Vendor Performance
+            </span>
           </span>
         )}
       </div>
-      <span className="min-w-0 truncate px-3 font-display text-xl font-medium text-foreground md:hidden" title="Vendor Performance Platform">
-        Vendor Performance
+      <span className="flex min-w-0 items-center gap-2 truncate px-3 md:hidden">
+        <Image src="/vpp_logo.svg" alt="" width={48} height={48} className="h-12 w-12 shrink-0" />
+        <span className="font-display text-base font-medium text-foreground" title="Vendor Performance Platform">
+          Vendor Performance
+        </span>
       </span>
       <nav aria-label="Account" className="ml-auto flex h-full items-center px-4 sm:px-6 lg:px-12">
         <SignInButton />

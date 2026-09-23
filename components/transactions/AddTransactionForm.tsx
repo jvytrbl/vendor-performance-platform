@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { ChangeEvent, FocusEvent, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createTransaction, type TransactionInput } from "@/lib/api/transactions";
@@ -11,6 +11,10 @@ import { validateTransactionInput } from "@/lib/domain/transactions/validateTran
 import { getVisibleFieldError } from "@/lib/ui/forms/getVisibleFieldError";
 import Button from "@/components/ui/Button";
 import ErrorBanner from "@/components/ui/ErrorBanner";
+import DateField from "@/components/forms/DateField";
+import FormField from "@/components/forms/FormField";
+import VendorCombobox from "@/components/forms/VendorCombobox";
+import { fieldControlClass } from "@/components/forms/fieldClasses";
 
 // vendor_id is deliberately typed as `number | undefined` here, distinct from the
 // stricter `TransactionInput` (vendor_id: number) used once we actually submit.
@@ -32,6 +36,18 @@ const initialInput: FormState = {
   quantity_ordered: 0,
   quantity_received: undefined,
 };
+
+const ALL_FIELDS = [
+  "vendor_id",
+  "transaction_date",
+  "item_description",
+  "agreed_price",
+  "actual_price",
+  "agreed_delivery_date",
+  "actual_delivery_date",
+  "quantity_ordered",
+  "quantity_received",
+];
 
 export default function AddTransactionForm() {
   const router = useRouter();
@@ -60,43 +76,38 @@ export default function AddTransactionForm() {
     loadVendors();
   }, [getAccessToken]);
 
-  const validation = validateTransactionInput(input as any);
+  const validation = validateTransactionInput(input as TransactionInput);
 
-  function handleChange(
-    event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) {
-    const { name, value } = event.target;
-    setInput((current) => {
-      if (name === "vendor_id" || name === "actual_price" || name === "quantity_received") {
-        return { ...current, [name]: value === "" ? undefined : Number(value) };
-      }
-      if (name === "agreed_price" || name === "quantity_ordered") {
-        return { ...current, [name]: Number(value) };
-      }
-      return { ...current, [name]: value };
+  function touch(name: string) {
+    setTouchedFields((current) => {
+      if (current.has(name)) return current;
+      const next = new Set(current);
+      next.add(name);
+      return next;
     });
   }
 
-  function handleBlur(event: FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-    const { name } = event.target;
-    setTouchedFields((current) => new Set(current).add(name));
+  function setText(
+    name: "transaction_date" | "item_description" | "agreed_delivery_date" | "actual_delivery_date",
+    value: string
+  ) {
+    setInput((current) => ({ ...current, [name]: value }));
+    touch(name);
+  }
+
+  function setOptionalNumber(name: "actual_price" | "quantity_received", value: string) {
+    setInput((current) => ({ ...current, [name]: value === "" ? undefined : Number(value) }));
+    touch(name);
+  }
+
+  function setRequiredNumber(name: "agreed_price" | "quantity_ordered", value: string) {
+    setInput((current) => ({ ...current, [name]: value === "" ? 0 : Number(value) }));
+    touch(name);
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    setTouchedFields(
-      new Set([
-        "vendor_id",
-        "transaction_date",
-        "item_description",
-        "agreed_price",
-        "actual_price",
-        "agreed_delivery_date",
-        "actual_delivery_date",
-        "quantity_ordered",
-        "quantity_received",
-      ])
-    );
+    setTouchedFields(new Set(ALL_FIELDS));
 
     if (!validation.valid) {
       return;
@@ -137,166 +148,159 @@ export default function AddTransactionForm() {
   const quantityReceivedError = getVisibleFieldError("quantity_received", touchedFields, validation);
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="vendor_id" className="text-sm font-medium text-foreground-muted">
-          Vendor
-        </label>
-        <select
-          id="vendor_id"
-          name="vendor_id"
-          value={input.vendor_id ?? ""}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          disabled={isLoadingVendors}
-          className="appearance-none rounded border border-border bg-surface py-2 pl-3 pr-10 text-sm text-foreground focus:border-accent focus:outline-none"
-        >
-          <option value="" disabled>
-            {isLoadingVendors ? "Loading vendors…" : "Select a vendor"}
-          </option>
-          {vendors.map((vendor) => (
-            <option key={vendor.id} value={vendor.id}>
-              {vendor.name}
-            </option>
-          ))}
-        </select>
-        {vendorIdError && <ErrorBanner message={vendorIdError} />}
-      </div>
+    <form
+      onSubmit={handleSubmit}
+      className="flex max-w-xl flex-col gap-8 rounded-lg border border-border bg-surface-muted p-8"
+    >
+      <section className="flex flex-col gap-5">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-display text-2xl font-medium text-foreground">At order time</h2>
+          <p className="text-sm text-foreground-muted">Details known when the order is placed.</p>
+        </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="transaction_date" className="text-sm font-medium text-foreground-muted">
-          Transaction date
-        </label>
-        <input
-          id="transaction_date"
-          name="transaction_date"
-          type="date"
-          value={input.transaction_date}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        />
-        {transactionDateError && <ErrorBanner message={transactionDateError} />}
-      </div>
+        <FormField id="vendor_id" label="Vendor" error={vendorIdError}>
+          <VendorCombobox
+            id="vendor_id"
+            vendors={vendors}
+            value={input.vendor_id}
+            disabled={isLoadingVendors}
+            placeholder={isLoadingVendors ? "Loading vendors…" : "Select a vendor"}
+            error={vendorIdError}
+            onChange={(vendorId) => {
+              setInput((current) => ({ ...current, vendor_id: vendorId }));
+              touch("vendor_id");
+            }}
+            onBlur={() => touch("vendor_id")}
+          />
+        </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="item_description" className="text-sm font-medium text-foreground-muted">
-          Item description
-        </label>
-        <input
-          id="item_description"
-          name="item_description"
-          value={input.item_description}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        />
-        {itemDescriptionError && <ErrorBanner message={itemDescriptionError} />}
-      </div>
+        <FormField id="item_description" label="Item description" error={itemDescriptionError}>
+          <input
+            id="item_description"
+            name="item_description"
+            value={input.item_description}
+            onChange={(event) => setText("item_description", event.target.value)}
+            onBlur={() => touch("item_description")}
+            aria-invalid={itemDescriptionError ? true : undefined}
+            aria-describedby={itemDescriptionError ? "item_description-error" : undefined}
+            className={fieldControlClass}
+          />
+        </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="agreed_price" className="text-sm font-medium text-foreground-muted">
-          Agreed price (RM)
-        </label>
-        <input
-          id="agreed_price"
-          name="agreed_price"
-          type="number"
-          min={0}
-          step="0.01"
-          value={input.agreed_price || ""}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        />
-        {agreedPriceError && <ErrorBanner message={agreedPriceError} />}
-      </div>
+        <FormField id="transaction_date" label="Transaction date" error={transactionDateError}>
+          <DateField
+            id="transaction_date"
+            value={input.transaction_date}
+            error={transactionDateError}
+            onChange={(value) => {
+              setText("transaction_date", value);
+              touch("transaction_date");
+            }}
+            onBlur={() => touch("transaction_date")}
+          />
+        </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="actual_price" className="text-sm font-medium text-foreground-muted">
-          Actual price (RM) <span className="text-foreground-subtle">(optional — fill in once delivered)</span>
-        </label>
-        <input
-          id="actual_price"
-          name="actual_price"
-          type="number"
-          min={0}
-          step="0.01"
-          value={input.actual_price ?? ""}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        />
-        {actualPriceError && <ErrorBanner message={actualPriceError} />}
-      </div>
+        <FormField id="agreed_price" label="Agreed price (RM)" error={agreedPriceError}>
+          <input
+            id="agreed_price"
+            name="agreed_price"
+            type="number"
+            min={0}
+            step="0.01"
+            value={input.agreed_price || ""}
+            onChange={(event) => setRequiredNumber("agreed_price", event.target.value)}
+            onBlur={() => touch("agreed_price")}
+            aria-invalid={agreedPriceError ? true : undefined}
+            aria-describedby={agreedPriceError ? "agreed_price-error" : undefined}
+            className={fieldControlClass}
+          />
+        </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="agreed_delivery_date" className="text-sm font-medium text-foreground-muted">
-          Agreed delivery date
-        </label>
-        <input
-          id="agreed_delivery_date"
-          name="agreed_delivery_date"
-          type="date"
-          value={input.agreed_delivery_date}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        />
-        {agreedDeliveryDateError && <ErrorBanner message={agreedDeliveryDateError} />}
-      </div>
+        <FormField id="agreed_delivery_date" label="Agreed delivery date" error={agreedDeliveryDateError}>
+          <DateField
+            id="agreed_delivery_date"
+            value={input.agreed_delivery_date}
+            error={agreedDeliveryDateError}
+            onChange={(value) => {
+              setText("agreed_delivery_date", value);
+              touch("agreed_delivery_date");
+            }}
+            onBlur={() => touch("agreed_delivery_date")}
+          />
+        </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="actual_delivery_date" className="text-sm font-medium text-foreground-muted">
-          Actual delivery date <span className="text-foreground-subtle">(optional — fill in once delivered)</span>
-        </label>
-        <input
-          id="actual_delivery_date"
-          name="actual_delivery_date"
-          type="date"
-          value={input.actual_delivery_date ?? ""}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        />
-        {actualDeliveryDateError && <ErrorBanner message={actualDeliveryDateError} />}
-      </div>
+        <FormField id="quantity_ordered" label="Quantity ordered" error={quantityOrderedError}>
+          <input
+            id="quantity_ordered"
+            name="quantity_ordered"
+            type="number"
+            min={0}
+            step="1"
+            value={input.quantity_ordered || ""}
+            onChange={(event) => setRequiredNumber("quantity_ordered", event.target.value)}
+            onBlur={() => touch("quantity_ordered")}
+            aria-invalid={quantityOrderedError ? true : undefined}
+            aria-describedby={quantityOrderedError ? "quantity_ordered-error" : undefined}
+            className={fieldControlClass}
+          />
+        </FormField>
+      </section>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="quantity_ordered" className="text-sm font-medium text-foreground-muted">
-          Quantity ordered
-        </label>
-        <input
-          id="quantity_ordered"
-          name="quantity_ordered"
-          type="number"
-          min={0}
-          step="1"
-          value={input.quantity_ordered || ""}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        />
-        {quantityOrderedError && <ErrorBanner message={quantityOrderedError} />}
-      </div>
+      <div className="border-t border-border" />
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="quantity_received" className="text-sm font-medium text-foreground-muted">
-          Quantity received <span className="text-foreground-subtle">(optional — fill in once delivered)</span>
-        </label>
-        <input
-          id="quantity_received"
-          name="quantity_received"
-          type="number"
-          min={0}
-          step="1"
-          value={input.quantity_received ?? ""}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-        />
-        {quantityReceivedError && <ErrorBanner message={quantityReceivedError} />}
-      </div>
+      <section className="flex flex-col gap-5">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-display text-2xl font-medium text-foreground">On delivery (optional)</h2>
+          <p className="text-sm text-foreground-muted">
+            Fill these in after the goods arrive. Leave them blank until then.
+          </p>
+        </div>
+
+        <FormField id="actual_price" label="Actual price (RM)" error={actualPriceError}>
+          <input
+            id="actual_price"
+            name="actual_price"
+            type="number"
+            min={0}
+            step="0.01"
+            value={input.actual_price ?? ""}
+            onChange={(event) => setOptionalNumber("actual_price", event.target.value)}
+            onBlur={() => touch("actual_price")}
+            aria-invalid={actualPriceError ? true : undefined}
+            aria-describedby={actualPriceError ? "actual_price-error" : undefined}
+            className={fieldControlClass}
+          />
+        </FormField>
+
+        <FormField id="actual_delivery_date" label="Actual delivery date" error={actualDeliveryDateError}>
+          <DateField
+            id="actual_delivery_date"
+            value={input.actual_delivery_date ?? ""}
+            error={actualDeliveryDateError}
+            onChange={(value) => {
+              setText("actual_delivery_date", value);
+              touch("actual_delivery_date");
+            }}
+            onBlur={() => touch("actual_delivery_date")}
+          />
+        </FormField>
+
+        <FormField id="quantity_received" label="Quantity received" error={quantityReceivedError}>
+          <input
+            id="quantity_received"
+            name="quantity_received"
+            type="number"
+            min={0}
+            step="1"
+            value={input.quantity_received ?? ""}
+            onChange={(event) => setOptionalNumber("quantity_received", event.target.value)}
+            onBlur={() => touch("quantity_received")}
+            aria-invalid={quantityReceivedError ? true : undefined}
+            aria-describedby={quantityReceivedError ? "quantity_received-error" : undefined}
+            className={fieldControlClass}
+          />
+        </FormField>
+      </section>
 
       {errorMessage && <ErrorBanner message={errorMessage} />}
 

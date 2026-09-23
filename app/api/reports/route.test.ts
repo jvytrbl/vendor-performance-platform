@@ -192,7 +192,14 @@ describe("GET /api/reports", () => {
         });
         const response = await GET(request);
         const body = await response.json();
-        expect(listReports).toHaveBeenCalledWith({ limit: 15, offset: 0 });
+        expect(listReports).toHaveBeenCalledWith({
+          limit: 15,
+          offset: 0,
+          status: undefined,
+          search: undefined,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
         expect(response.status).toBe(200);
         expect(body).toEqual({
           reports: [
@@ -219,7 +226,14 @@ describe("GET /api/reports", () => {
           })
         );
         const body = await response.json();
-        expect(listReports).toHaveBeenCalledWith({ limit: 15, offset: 45 });
+        expect(listReports).toHaveBeenCalledWith({
+          limit: 15,
+          offset: 45,
+          status: undefined,
+          search: undefined,
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
         expect(response.status).toBe(200);
         expect(body).toEqual({ reports: [], total: 31 });
       });

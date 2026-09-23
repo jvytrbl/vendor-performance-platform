@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ChangeEvent, FocusEvent, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { createVendor, type VendorInput } from "@/lib/api/vendors";
@@ -11,6 +11,8 @@ import type { DuplicateVendorMatch } from "@/lib/ui/vendors/buildDuplicateConfir
 import { useAccessToken } from "@/lib/auth/useAccessToken";
 import Button from "@/components/ui/Button";
 import ErrorBanner from "@/components/ui/ErrorBanner";
+import FormField from "@/components/forms/FormField";
+import { fieldControlClass } from "@/components/forms/fieldClasses";
 import DuplicateConfirmation from "./DuplicateConfirmation";
 
 const initialInput: VendorInput = {
@@ -30,14 +32,13 @@ export default function AddVendorForm() {
 
   const validation = validateVendorInput(input);
 
-  function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    const { name, value } = event.target;
-    setInput((current) => ({ ...current, [name]: value }));
+  function touch(name: string) {
+    setTouchedFields((current) => new Set(current).add(name));
   }
 
-  function handleBlur(event: FocusEvent<HTMLInputElement>) {
-    const { name } = event.target;
-    setTouchedFields((current) => new Set(current).add(name));
+  function updateField(name: keyof VendorInput, value: string) {
+    setInput((current) => ({ ...current, [name]: value }));
+    touch(name);
   }
 
   async function submitVendor(confirmDuplicate: boolean) {
@@ -86,51 +87,48 @@ export default function AddVendorForm() {
   const contactInfoError = getVisibleFieldError("contact_info", touchedFields, validation);
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="name" className="text-sm font-medium text-foreground-muted">
-          Vendor name
-        </label>
+    <form
+      onSubmit={handleSubmit}
+      className="flex max-w-xl flex-col gap-6 rounded-lg border border-border bg-surface-muted p-8"
+    >
+      <FormField id="name" label="Vendor name" error={nameError}>
         <input
           id="name"
           name="name"
           value={input.name}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+          onChange={(event) => updateField("name", event.target.value)}
+          onBlur={() => touch("name")}
+          aria-invalid={nameError ? true : undefined}
+          aria-describedby={nameError ? "name-error" : undefined}
+          className={fieldControlClass}
         />
-        {nameError && <ErrorBanner message={nameError} />}
-      </div>
+      </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="registration_number" className="text-sm font-medium text-foreground-muted">
-          Registration number
-        </label>
+      <FormField id="registration_number" label="Registration number" error={registrationNumberError}>
         <input
           id="registration_number"
           name="registration_number"
           value={input.registration_number}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+          onChange={(event) => updateField("registration_number", event.target.value)}
+          onBlur={() => touch("registration_number")}
+          aria-invalid={registrationNumberError ? true : undefined}
+          aria-describedby={registrationNumberError ? "registration_number-error" : undefined}
+          className={fieldControlClass}
         />
-        {registrationNumberError && <ErrorBanner message={registrationNumberError} />}
-      </div>
+      </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="contact_info" className="text-sm font-medium text-foreground-muted">
-          Contact info
-        </label>
+      <FormField id="contact_info" label="Contact info" error={contactInfoError}>
         <input
           id="contact_info"
           name="contact_info"
           value={input.contact_info}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+          onChange={(event) => updateField("contact_info", event.target.value)}
+          onBlur={() => touch("contact_info")}
+          aria-invalid={contactInfoError ? true : undefined}
+          aria-describedby={contactInfoError ? "contact_info-error" : undefined}
+          className={fieldControlClass}
         />
-        {contactInfoError && <ErrorBanner message={contactInfoError} />}
-      </div>
+      </FormField>
 
       {pendingDuplicate && (
         <DuplicateConfirmation

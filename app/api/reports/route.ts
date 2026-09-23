@@ -4,6 +4,7 @@ import { validateReportInput } from "../../../lib/domain/reports/validateReportI
 import { insertReport, listReports } from "@/lib/repositories/reports";
 import { getVendorById } from "@/lib/repositories/vendors";
 import { parsePageParams } from "../../../lib/pagination/parsePageParams";
+import { parseReportListFilters } from "@/lib/domain/reports/reportListQuery";
 
 export const POST = withAuth(async (request) => {
   const body = await request.json();
@@ -31,13 +32,33 @@ export const POST = withAuth(async (request) => {
 });
 
 export const GET = withAuth(async (request) => {
-  const page = parsePageParams(new URL(request.url).searchParams);
+  const params = new URL(request.url).searchParams;
+  const page = parsePageParams(params);
   if (!page.ok) {
     return NextResponse.json(
       { error: page.error, code: "VALIDATION_FAILED", field: page.field },
       { status: 400 }
     );
   }
-  const result = await listReports({ limit: page.limit, offset: page.offset });
+  const filters = parseReportListFilters({
+    status: params.get("status"),
+    search: params.get("search"),
+    sortBy: params.get("sortBy"),
+    sortOrder: params.get("sortOrder"),
+  });
+  if (!filters.ok) {
+    return NextResponse.json(
+      { error: filters.error, code: "VALIDATION_FAILED", field: filters.field },
+      { status: 400 }
+    );
+  }
+  const result = await listReports({
+    limit: page.limit,
+    offset: page.offset,
+    status: filters.status,
+    search: filters.search,
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
+  });
   return NextResponse.json(result);
 });

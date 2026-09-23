@@ -1,5 +1,6 @@
 import { getDbPool } from "@/lib/db";
 import type { ReportInput } from "@/lib/domain/reports/validateReportInput";
+import { buildReportListQuery, type ReportSortBy, type ReportSortOrder, type ReportStatusFilter } from "@/lib/domain/reports/reportListQuery";
 import type { ReportSectionInput } from "../domain/reports/validateReportSections";
 import type { GeneratedMetricRow } from "@/lib/domain/reports/runReportGeneration";
 
@@ -94,19 +95,28 @@ export async function insertReport(input: ReportInput): Promise<ReportRecord> {
 export async function listReports(page: {
   limit: number;
   offset: number;
+  status?: ReportStatusFilter;
+  search?: string;
+  sortBy?: ReportSortBy;
+  sortOrder?: ReportSortOrder;
 }): Promise<{ reports: ReportListItem[]; total: number }> {
   const pool = await getDbPool();
   const request = pool.request();
+  const listQuery = buildReportListQuery(page);
+  for (const binding of listQuery.bindings) {
+    request.input(binding.name, binding.value);
+  }
   request.input("offset", page.offset);
   request.input("limit", page.limit);
 
   const countResult = await request.query(
-    `SELECT COUNT(*) AS total FROM VENDOR_PERFORMANCE_REPORTS`
+    `SELECT COUNT(*) AS total FROM VENDOR_PERFORMANCE_REPORTS ${listQuery.whereClause}`
   );
   const rowsResult = await request.query(
     `SELECT id, reference_number, period_type, period_start, period_end, status, created_at
      FROM VENDOR_PERFORMANCE_REPORTS
-     ORDER BY created_at DESC
+     ${listQuery.whereClause}
+     ${listQuery.orderByClause}
      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
   );
 
