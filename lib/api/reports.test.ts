@@ -7,6 +7,7 @@ import {
   generateReport,
   finalizeReport,
   exportReport,
+  deleteReport,
   type ReportInput,
 } from "./reports";
 
@@ -38,6 +39,7 @@ describe("fetchReports", () => {
             created_at: "2026-04-01T00:00:00.000Z",
           },
         ],
+        total: 1,
       })
     );
 
@@ -46,8 +48,9 @@ describe("fetchReports", () => {
     expect(fetch).toHaveBeenCalledWith("/api/reports", {
       headers: { Authorization: "Bearer good.token" },
     });
-    expect(result).toHaveLength(1);
-    expect(result[0].reference_number).toBe("VPR-20260101-123456");
+    expect(result.reports).toHaveLength(1);
+    expect(result.total).toBe(1);
+    expect(result.reports[0].reference_number).toBe("VPR-20260101-123456");
   });
 
   it("throws with the server's error message when the request fails", async () => {
@@ -308,6 +311,37 @@ describe("exportReport", () => {
       outcome: "error",
       error: "Only a Finalized report can be exported",
       code: "REPORT_NOT_FINALIZED",
+    });
+  });
+});
+
+describe("deleteReport", () => {
+  it("returns deleted when the draft is removed", async () => {
+    vi.mocked(fetch).mockResolvedValue(mockResponse(200, { ok: true }));
+
+    const result = await deleteReport(7, "good.token");
+
+    expect(fetch).toHaveBeenCalledWith("/api/reports/7", {
+      method: "DELETE",
+      headers: { Authorization: "Bearer good.token" },
+    });
+    expect(result).toEqual({ outcome: "deleted" });
+  });
+
+  it("returns the error code when the report is finalized", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      mockResponse(409, {
+        error: "Finalized reports cannot be deleted",
+        code: "REPORT_FINALIZED",
+      })
+    );
+
+    const result = await deleteReport(7, "good.token");
+
+    expect(result).toEqual({
+      outcome: "error",
+      error: "Finalized reports cannot be deleted",
+      code: "REPORT_FINALIZED",
     });
   });
 });

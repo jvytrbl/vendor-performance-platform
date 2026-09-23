@@ -131,9 +131,9 @@ describe("GET api/transactions", () => {
         expect(response.status).toBe(401);
         expect(body).toEqual({ error: "Invalid or Expired token", code: "UNAUTHORIZED" });
       });
-      it("returns all transactions with default filters when no query params are given", async () => {
+      it("returns the first page of 15 transactions and the total when no page params are given", async () => {
         vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
-        vi.mocked(getTransactions).mockResolvedValue([{ id: 1 }] as any);
+        vi.mocked(getTransactions).mockResolvedValue({ transactions: [{ id: 1 }], total: 1 } as any);
         const request = new Request("http://localhost/api/transactions", {
           headers: { Authorization: "Bearer good.token" },
         });
@@ -143,17 +143,17 @@ describe("GET api/transactions", () => {
           vendor_id: undefined,
           dateFrom: undefined,
           dateTo: undefined,
-          limit: undefined,
-          offset: undefined,
+          limit: 15,
+          offset: 0,
         });
         expect(response.status).toBe(200);
-        expect(body).toEqual({ transactions: [{ id: 1 }] });
+        expect(body).toEqual({ transactions: [{ id: 1 }], total: 1 });
       });
-      it("parses vendor_id, date range, and pagination from query params", async () => {
+      it("parses vendor_id, date range, and page from query params", async () => {
         vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
-        vi.mocked(getTransactions).mockResolvedValue([] as any);
+        vi.mocked(getTransactions).mockResolvedValue({ transactions: [], total: 0 } as any);
         const request = new Request(
-          "http://localhost/api/transactions?vendor_id=5&dateFrom=2026-01-01&dateTo=2026-12-31&limit=20&offset=10",
+          "http://localhost/api/transactions?vendor_id=5&dateFrom=2026-01-01&dateTo=2026-12-31&page=3&pageSize=15",
           { headers: { Authorization: "Bearer good.token" } }
         );
         await GET(request);
@@ -161,9 +161,21 @@ describe("GET api/transactions", () => {
           vendor_id: 5,
           dateFrom: "2026-01-01",
           dateTo: "2026-12-31",
-          limit: 20,
-          offset: 10,
+          limit: 15,
+          offset: 30,
         });
+      });
+      it("returns an empty page with the total when the requested page is past the last page", async () => {
+        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(getTransactions).mockResolvedValue({ transactions: [], total: 31 } as any);
+        const response = await GET(
+          new Request("http://localhost/api/transactions?page=4&pageSize=15", {
+            headers: { Authorization: "Bearer good.token" },
+          })
+        );
+        const body = await response.json();
+        expect(response.status).toBe(200);
+        expect(body).toEqual({ transactions: [], total: 31 });
       });
       it("returns 400 when vendor_id is not a positive integer", async () => {
         vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
@@ -180,18 +192,18 @@ describe("GET api/transactions", () => {
           field: "vendor_id",
         });
       });
-      it("returns 400 when limit is not a non-negative integer", async () => {
+      it("returns 400 when pageSize is not a positive integer", async () => {
         vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
-        const request = new Request("http://localhost/api/transactions?limit=-5", {
+        const request = new Request("http://localhost/api/transactions?pageSize=-5", {
           headers: { Authorization: "Bearer good.token" },
         });
         const response = await GET(request);
         const body = await response.json();
         expect(response.status).toBe(400);
         expect(body).toEqual({
-          error: "limit must be a non-negative integer",
+          error: "pageSize must be a positive integer up to 200",
           code: "VALIDATION_FAILED",
-          field: "limit",
+          field: "pageSize",
         });
       });
 });

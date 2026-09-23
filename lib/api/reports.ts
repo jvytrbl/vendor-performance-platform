@@ -17,8 +17,25 @@ export interface ReportInput {
   vendor_ids: number[];
 }
 
-export async function fetchReports(accessToken: string): Promise<ReportListItem[]> {
-  const response = await fetch("/api/reports", {
+export interface ReportListQuery {
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ReportPage {
+  reports: ReportListItem[];
+  total: number;
+}
+
+export async function fetchReports(
+  accessToken: string,
+  query: ReportListQuery = {}
+): Promise<ReportPage> {
+  const params = new URLSearchParams();
+  if (query.page !== undefined) params.set("page", String(query.page));
+  if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  const search = params.toString();
+  const response = await fetch(`/api/reports${search ? `?${search}` : ""}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const body = await response.json();
@@ -27,7 +44,7 @@ export async function fetchReports(accessToken: string): Promise<ReportListItem[
     throw new Error(body.error ?? "Failed to fetch reports");
   }
 
-  return body.reports;
+  return { reports: body.reports, total: body.total };
 }
 
 export type CreateReportResult =
@@ -178,6 +195,25 @@ export async function exportReport(
     const disposition = response.headers.get("Content-Disposition") ?? "";
     const match = disposition.match(/filename="([^"]+)"/);
     return { outcome: "file", blob, filename: match?.[1] ?? `report-${id}.${format}` };
+  }
+  const body = await response.json();
+  return { outcome: "error", error: body.error, code: body.code };
+}
+
+export type DeleteReportResult =
+  | { outcome: "deleted" }
+  | { outcome: "error"; error: string; code: string };
+
+export async function deleteReport(
+  id: number,
+  accessToken: string
+): Promise<DeleteReportResult> {
+  const response = await fetch(`/api/reports/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (response.ok) {
+    return { outcome: "deleted" };
   }
   const body = await response.json();
   return { outcome: "error", error: body.error, code: body.code };

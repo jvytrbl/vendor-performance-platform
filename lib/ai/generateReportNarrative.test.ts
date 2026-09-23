@@ -43,6 +43,11 @@ describe("generateReportNarrative", () => {
       expect(prompt).toContain("70");
       expect(prompt).toContain("50");
       expect(prompt).toContain("Do not invent any numeric value");
+      expect(prompt).toContain("Vendor Summary:");
+      expect(prompt).toContain("Delivery Performance:");
+      expect(prompt).toContain("Pricing Analysis:");
+      expect(prompt).toContain("Order Accuracy:");
+      expect(prompt).toContain("Do not repeat the same paragraph");
       expect(result).toBe(
         "On-time delivery was 80 versus the prior period 70 and a peer average of 50."
       );

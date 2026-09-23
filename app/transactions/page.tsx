@@ -1,21 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { Plus, Upload, X } from "lucide-react";
 import {
   fetchTransactions,
   deleteTransaction,
   type TransactionRecord,
 } from "@/lib/api/transactions";
-import { fetchVendors, type VendorRecord } from "@/lib/api/vendors";
+import { fetchAllVendors, type VendorRecord } from "@/lib/api/vendors";
 import TransactionTable from "@/components/transactions/TransactionTable";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
+import LinkButton from "@/components/ui/LinkButton";
+import LoadingIndicator from "@/components/ui/LoadingIndicator";
+import TablePagination from "@/components/ui/TablePagination";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination/parsePageParams";
 
 type Status = "loading" | "ready" | "error";
 
 export default function TransactionsPage() {
   const getAccessToken = useAccessToken();
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [vendors, setVendors] = useState<VendorRecord[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -35,12 +43,15 @@ export default function TransactionsPage() {
             vendor_id: vendorIdFilter ? Number(vendorIdFilter) : undefined,
             dateFrom: dateFromFilter || undefined,
             dateTo: dateToFilter || undefined,
+            page,
+            pageSize: DEFAULT_PAGE_SIZE,
           },
           accessToken
         ),
-        fetchVendors(accessToken),
+        fetchAllVendors(accessToken),
       ]);
-      setTransactions(result);
+      setTransactions(result.transactions);
+      setTotal(result.total);
       setVendors(vendorList);
       setStatus("ready");
     } catch (error) {
@@ -49,7 +60,7 @@ export default function TransactionsPage() {
       );
       setStatus("error");
     }
-  }, [getAccessToken, vendorIdFilter, dateFromFilter, dateToFilter]);
+  }, [getAccessToken, vendorIdFilter, dateFromFilter, dateToFilter, page]);
 
   useEffect(() => {
     loadTransactions();
@@ -63,7 +74,11 @@ export default function TransactionsPage() {
       const result = await deleteTransaction(id, accessToken);
 
       if (result.outcome === "deleted") {
-        setTransactions((current) => current.filter((transaction) => transaction.id !== id));
+        if (transactions.length === 1 && page > 1) {
+          setPage(page - 1);
+        } else {
+          await loadTransactions();
+        }
       } else {
         setErrorMessage(result.error);
       }
@@ -83,23 +98,30 @@ export default function TransactionsPage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-          Transactions
-        </h1>
-        <div className="flex gap-3">
-          <Link
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="font-display text-4xl font-medium text-foreground">
+            Transactions
+          </h1>
+          <p className="mt-2 text-sm text-foreground-muted">
+            Recorded purchases and deliveries per vendor. Add entries manually or upload a file in bulk.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <LinkButton
             href="/transactions/bulk-upload"
-            className="rounded border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-muted"
+            variant="secondary"
+            icon={<Upload className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
           >
             Bulk upload
-          </Link>
-          <Link
+          </LinkButton>
+          <LinkButton
             href="/transactions/add"
-            className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+            variant="primary"
+            icon={<Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />}
           >
             Add transaction
-          </Link>
+          </LinkButton>
         </div>
       </div>
 
@@ -115,7 +137,10 @@ export default function TransactionsPage() {
             <select
               id="vendor_id"
               value={vendorIdFilter}
-              onChange={(event) => setVendorIdFilter(event.target.value)}
+              onChange={(event) => {
+                setVendorIdFilter(event.target.value);
+                setPage(1);
+              }}
               className="w-48 appearance-none rounded border border-border bg-surface py-2 pl-3 pr-10 text-sm text-foreground focus:border-accent focus:outline-none"
             >
               <option value="">Any vendor</option>
@@ -135,7 +160,10 @@ export default function TransactionsPage() {
               id="dateFrom"
               type="date"
               value={dateFromFilter}
-              onChange={(event) => setDateFromFilter(event.target.value)}
+              onChange={(event) => {
+                setDateFromFilter(event.target.value);
+                setPage(1);
+              }}
               className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
             />
           </div>
@@ -148,7 +176,10 @@ export default function TransactionsPage() {
               id="dateTo"
               type="date"
               value={dateToFilter}
-              onChange={(event) => setDateToFilter(event.target.value)}
+              onChange={(event) => {
+                setDateToFilter(event.target.value);
+                setPage(1);
+              }}
               className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
             />
           </div>
@@ -160,30 +191,47 @@ export default function TransactionsPage() {
                 setVendorIdFilter("");
                 setDateFromFilter("");
                 setDateToFilter("");
+                setPage(1);
               }}
-              className="text-sm font-medium text-foreground-muted hover:text-foreground"
+              className="inline-flex items-center gap-1 text-sm font-medium text-foreground-muted transition-colors duration-150 ease-out hover:text-foreground"
             >
+              <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
               Clear filters
             </button>
           )}
         </form>
 
-        {status === "loading" && (
-          <p className="text-sm text-foreground-muted">Loading transactions…</p>
-        )}
+        {status === "loading" && <LoadingIndicator label="Loading transactions…" />}
 
-        {status === "error" && <p className="text-sm text-danger">{errorMessage}</p>}
+        {status === "error" && (
+          <ErrorBanner
+            message={errorMessage ?? "Failed to load transactions"}
+            action={
+              <Button type="button" variant="secondary" onClick={loadTransactions}>
+                Retry
+              </Button>
+            }
+          />
+        )}
 
         {status === "ready" && (
           <>
-            {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+            {errorMessage && <ErrorBanner message={errorMessage} />}
             <TransactionTable
                 transactions={transactions}
                 vendors={vendors}
+                page={page}
+                pageSize={DEFAULT_PAGE_SIZE}
                 emptyMessage={emptyMessage}
                 onDelete={handleDelete}
                 deletingId={deletingId}
               />
+            <TablePagination
+              page={page}
+              pageSize={DEFAULT_PAGE_SIZE}
+              total={total}
+              onPageChange={setPage}
+            />
           </>
         )}
       </div>

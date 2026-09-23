@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FocusEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import { createTransaction, type TransactionInput } from "@/lib/api/transactions";
-import { fetchVendors, type VendorRecord } from "@/lib/api/vendors";
+import { fetchAllVendors, type VendorRecord } from "@/lib/api/vendors";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
 import { validateTransactionInput } from "@/lib/domain/transactions/validateTransactionInput";
 import { getVisibleFieldError } from "@/lib/ui/forms/getVisibleFieldError";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
 
 // vendor_id is deliberately typed as `number | undefined` here, distinct from the
 // stricter `TransactionInput` (vendor_id: number) used once we actually submit.
@@ -44,7 +47,7 @@ export default function AddTransactionForm() {
     async function loadVendors() {
       try {
         const accessToken = await getAccessToken();
-        const result = await fetchVendors(accessToken);
+        const result = await fetchAllVendors(accessToken);
         setVendors(result);
       } catch (error) {
         setErrorMessage(
@@ -157,7 +160,7 @@ export default function AddTransactionForm() {
             </option>
           ))}
         </select>
-        {vendorIdError && <p className="text-sm text-danger">{vendorIdError}</p>}
+        {vendorIdError && <ErrorBanner message={vendorIdError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -173,7 +176,7 @@ export default function AddTransactionForm() {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {transactionDateError && <p className="text-sm text-danger">{transactionDateError}</p>}
+        {transactionDateError && <ErrorBanner message={transactionDateError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -188,7 +191,7 @@ export default function AddTransactionForm() {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {itemDescriptionError && <p className="text-sm text-danger">{itemDescriptionError}</p>}
+        {itemDescriptionError && <ErrorBanner message={itemDescriptionError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -206,7 +209,7 @@ export default function AddTransactionForm() {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {agreedPriceError && <p className="text-sm text-danger">{agreedPriceError}</p>}
+        {agreedPriceError && <ErrorBanner message={agreedPriceError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -224,7 +227,7 @@ export default function AddTransactionForm() {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {actualPriceError && <p className="text-sm text-danger">{actualPriceError}</p>}
+        {actualPriceError && <ErrorBanner message={actualPriceError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -240,7 +243,7 @@ export default function AddTransactionForm() {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {agreedDeliveryDateError && <p className="text-sm text-danger">{agreedDeliveryDateError}</p>}
+        {agreedDeliveryDateError && <ErrorBanner message={agreedDeliveryDateError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -256,7 +259,7 @@ export default function AddTransactionForm() {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {actualDeliveryDateError && <p className="text-sm text-danger">{actualDeliveryDateError}</p>}
+        {actualDeliveryDateError && <ErrorBanner message={actualDeliveryDateError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -274,7 +277,7 @@ export default function AddTransactionForm() {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {quantityOrderedError && <p className="text-sm text-danger">{quantityOrderedError}</p>}
+        {quantityOrderedError && <ErrorBanner message={quantityOrderedError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -292,18 +295,20 @@ export default function AddTransactionForm() {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {quantityReceivedError && <p className="text-sm text-danger">{quantityReceivedError}</p>}
+        {quantityReceivedError && <ErrorBanner message={quantityReceivedError} />}
       </div>
 
-      {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+      {errorMessage && <ErrorBanner message={errorMessage} />}
 
-      <button
+      <Button
         type="submit"
-        disabled={isSubmitting}
-        className="self-start rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-foreground-muted/40"
+        variant="primary"
+        isLoading={isSubmitting}
+        icon={<Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />}
+        className="self-start"
       >
         {isSubmitting ? "Adding…" : "Add transaction"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { CheckCircle2, TriangleAlert, Upload } from "lucide-react";
 import {
   uploadTransactionsFile,
   type BulkUploadRowError,
 } from "@/lib/api/transactions";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
-import LoadingIndicator from "@/components/ui/LoadingIndicator";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
+import ProgressBar from "@/components/ui/ProgressBar";
 
 interface UploadSummary {
   inserted: number;
@@ -83,26 +86,30 @@ export default function BulkUploadForm() {
           </p>
         </div>
 
-        {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+        {errorMessage && <ErrorBanner message={errorMessage} />}
 
-        {isUploading && <LoadingIndicator label="Processing the file…" />}
+        {isUploading && <ProgressBar label="Processing the file…" />}
 
-        <button
+        <Button
           type="submit"
+          variant="primary"
           disabled={isUploading}
-          className="self-start rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-foreground-muted/40"
+          icon={<Upload className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+          className="self-start"
         >
           {isUploading ? "Uploading…" : "Upload"}
-        </button>
+        </Button>
       </form>
 
       {summary && (
         <div className="flex flex-col gap-4 border-t border-border pt-6">
           <div className="flex gap-6 text-sm">
-            <p className="text-foreground">
+            <p className="flex items-center gap-1.5 text-foreground">
+              <CheckCircle2 className="h-4 w-4 text-accent" strokeWidth={1.75} aria-hidden="true" />
               <span className="font-semibold text-accent">{summary.inserted}</span> inserted
             </p>
-            <p className="text-foreground">
+            <p className="flex items-center gap-1.5 text-foreground">
+              <TriangleAlert className="h-4 w-4 text-danger" strokeWidth={1.75} aria-hidden="true" />
               <span className="font-semibold text-danger">{summary.failed}</span> failed
             </p>
           </div>
@@ -127,7 +134,7 @@ export default function BulkUploadForm() {
                   <tr key={index} className="border-b border-border">
                     <td className="px-4 py-2 text-sm text-foreground-muted">{rowError.row}</td>
                     <td className="px-4 py-2 text-sm text-foreground-muted">{rowError.field}</td>
-                    <td className="px-4 py-2 text-sm text-danger">{rowError.error}</td>
+                    <td className="px-4 py-2"><ErrorBanner message={rowError.error} /></td>
                   </tr>
                 ))}
               </tbody>

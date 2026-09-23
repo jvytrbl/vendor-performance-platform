@@ -12,18 +12,50 @@ export interface VendorRecord {
     contact_info: string;
   }
   
-  export async function fetchVendors(accessToken: string): Promise<VendorRecord[]> {
-    const response = await fetch("/api/vendors", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const body = await response.json();
-  
-    if (!response.ok) {
-      throw new Error(body.error ?? "Failed to fetch vendors");
-    }
-  
-    return body.vendors;
+export interface VendorListQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+}
+
+export interface VendorPage {
+  vendors: VendorRecord[];
+  total: number;
+}
+
+export async function fetchVendors(
+  accessToken: string,
+  query: VendorListQuery = {}
+): Promise<VendorPage> {
+  const params = new URLSearchParams();
+  if (query.page !== undefined) params.set("page", String(query.page));
+  if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  if (query.search) params.set("q", query.search);
+
+  const search = params.toString();
+  const response = await fetch(`/api/vendors${search ? `?${search}` : ""}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new Error(body.error ?? "Failed to fetch vendors");
   }
+
+  return { vendors: body.vendors, total: body.total };
+}
+
+export async function fetchAllVendors(accessToken: string): Promise<VendorRecord[]> {
+  const pageSize = 200;
+  const first = await fetchVendors(accessToken, { page: 1, pageSize });
+  const vendors = [...first.vendors];
+  const pageCount = Math.ceil(first.total / pageSize);
+  for (let page = 2; page <= pageCount; page += 1) {
+    const next = await fetchVendors(accessToken, { page, pageSize });
+    vendors.push(...next.vendors);
+  }
+  return vendors;
+}
   
   export type CreateVendorResult =
     | { outcome: "created"; vendor: VendorRecord }

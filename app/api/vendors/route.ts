@@ -1,10 +1,10 @@
 // GET request :  getting vendors from the database
 import { NextResponse } from "next/server";
-import { getDbPool } from "@/lib/db";
 import { validateAuthHeader } from "@/lib/auth";
 import { validateVendorInput } from "../../../lib/domain/vendors/validateVendorInput";
 import { findDuplicateVendor } from "../../../lib/domain/vendors/findDuplicateVendor";
-import { getAllVendors, insertVendor } from "@/lib/repositories/vendors";
+import { getAllVendors, insertVendor, listVendors } from "@/lib/repositories/vendors";
+import { parsePageParams } from "../../../lib/pagination/parsePageParams";
 
 
 export async function GET(request: Request) {
@@ -17,16 +17,25 @@ export async function GET(request: Request) {
             { status: 401}
         );
     }
+
+    const params = new URL(request.url).searchParams;
+    const page = parsePageParams(params);
+    if (!page.ok) {
+        return NextResponse.json(
+            { error: page.error, code: "VALIDATION_FAILED", field: page.field },
+            { status: 400 }
+        );
+    }
+    const search = params.get("q")?.trim() || undefined;
     
     try {
-        const pool = await getDbPool(); 
-        const result = await pool
-        .request()
-        .query("SELECT id, name, registration_number, contact_info, created_at FROM VENDORS ORDER BY created_at DESC"); 
-
-        return NextResponse.json({
-            vendors: result.recordset, 
+        const result = await listVendors({
+            search,
+            limit: page.limit,
+            offset: page.offset,
         });
+
+        return NextResponse.json(result);
     } catch (error: unknown) { 
         	return NextResponse.json({
                 error: "Failed to fetch vendors",

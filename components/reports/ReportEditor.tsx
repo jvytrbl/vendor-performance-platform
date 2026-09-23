@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMsal } from "@azure/msal-react";
+import { ArrowLeft, Download, Info, Pencil, Save } from "lucide-react";
 import type { ReportSectionInput } from "@/lib/domain/reports/validateReportSections";
+import { validateReportReadyToFinalize } from "@/lib/domain/reports/validateReportReadyToFinalize";
 import {
   exportReport,
   fetchReport,
@@ -13,14 +16,25 @@ import {
   type ReportDetail,
   type ReportMetric,
 } from "@/lib/api/reports";
+import { fetchAllVendors } from "@/lib/api/vendors";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
 import {
   clearDraftFields,
   restoreDraftFields,
   saveDraftFields,
 } from "@/lib/ui/reports/reportDraftStorage";
+import { consumeAutoGenerateFlag } from "@/lib/ui/reports/autoGenerateFlag";
 import { resolveReportActionFailureMessage } from "@/lib/ui/reports/resolveReportActionFailureMessage";
+import { getMetricSeverity, type ColoredMetricKey } from "@/lib/ui/reports/getMetricSeverity";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
 import LoadingIndicator from "@/components/ui/LoadingIndicator";
+import ProgressBar from "@/components/ui/ProgressBar";
+import StatusBadge from "@/components/ui/StatusBadge";
+
+const Lottie = dynamic(() => import("lottie-react").then((mod) => ({ default: mod.Lottie })), {
+  ssr: false,
+});
 
 const API_SCOPE = "api://542c58fb-c9a9-4e98-a11e-da6fea5b1809/access_as_user";
 
@@ -49,11 +63,140 @@ function sectionsFromReport(report: ReportDetail): ReportSectionInput {
   };
 }
 
-function formatMetric(value: number | null): string {
-  return value === null ? "—" : String(value);
+function MetricValue({ value, className }: { value: number | null; className?: string }) {
+  if (value === null) {
+    return (
+      <span title="No eligible transactions" aria-label="No eligible transactions">
+        <span aria-hidden="true" className="text-foreground-subtle">
+          —
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className={`tabular-nums ${className ?? "text-foreground"}`}>
+      {String(value)}
+    </span>
+  );
 }
 
-export default function ReportEditor({ id }: { id: number }) {
+const SEVERITY_CLASSES: Record<ReturnType<typeof getMetricSeverity>, string> = {
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-danger",
+  neutral: "text-foreground-muted",
+};
+
+function metricClass(metric: ColoredMetricKey, value: number | null): string {
+  return SEVERITY_CLASSES[getMetricSeverity(metric, value)];
+}
+
+function metricRowClasses(striped: boolean): { row: string; sticky: string } {
+  if (striped) {
+    return {
+      row: "bg-surface-muted hover:bg-[color-mix(in_oklch,var(--color-surface-muted)_72%,var(--color-border))]",
+      sticky:
+        "bg-surface-muted group-hover:bg-[color-mix(in_oklch,var(--color-surface-muted)_72%,var(--color-border))]",
+    };
+  }
+
+  return {
+    row: "bg-surface hover:bg-[color-mix(in_oklch,var(--color-surface)_55%,var(--color-surface-muted))]",
+    sticky:
+      "bg-surface group-hover:bg-[color-mix(in_oklch,var(--color-surface)_55%,var(--color-surface-muted))]",
+  };
+}
+
+function periodDate(value: string): string {
+  return String(value).slice(0, 10);
+}
+
+function sectionsHaveText(sections: ReportSectionInput): boolean {
+  return SECTIONS.some((section) => sections[section.key].trim() !== "");
+}
+
+function proseParagraphs(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  return trimmed.split(/\n{2,}/);
+}
+
+const GENERATING_PHRASES = [
+  "Gathering vendor data...",
+  "Computing performance metrics...",
+  "Writing your report...",
+  "Checking the numbers...",
+];
+
+function GeneratingAnimation() {
+  const [reduced, setReduced] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => setReduced(query.matches);
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, []);
+
+  if (reduced === null) {
+    return <div className="h-40 w-40" aria-hidden="true" />;
+  }
+
+  return (
+    <Lottie
+      key={reduced ? "still" : "play"}
+      src="/animations/loading.json"
+      autoplay={!reduced}
+      loop={!reduced}
+      className="h-40 w-40"
+      aria-hidden="true"
+    />
+  );
+}
+
+function GeneratingPhrases() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setIndex((current) => (current + 1) % GENERATING_PHRASES.length);
+    }, 1800);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="relative h-5 w-full">
+      {GENERATING_PHRASES.map((phrase, phraseIndex) => {
+        const active = phraseIndex === index;
+        return (
+          <p
+            key={phrase}
+            aria-hidden={active ? undefined : true}
+            className={`generate-phrase absolute inset-x-0 text-center text-sm text-foreground-muted ${
+              active ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {phrase}
+          </p>
+        );
+      })}
+      <p className="sr-only" role="status" aria-live="polite">
+        {GENERATING_PHRASES[index]}
+      </p>
+    </div>
+  );
+}
+
+export default function ReportEditor({
+  id,
+  startInEdit = false,
+}: {
+  id: number;
+  startInEdit?: boolean;
+}) {
   const { instance } = useMsal();
   const getAccessToken = useAccessToken();
   const [report, setReport] = useState<ReportDetail | null>(null);
@@ -63,6 +206,24 @@ export default function ReportEditor({ id }: { id: number }) {
     null
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<"load" | "generate" | "other" | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editBaseline, setEditBaseline] = useState<ReportSectionInput | null>(null);
+  const [confirmingFinalize, setConfirmingFinalize] = useState(false);
+  const [confirmingGenerate, setConfirmingGenerate] = useState(false);
+  const [vendorNames, setVendorNames] = useState<Map<number, string>>(new Map());
+  const appliedEditFlag = useRef(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
+
+  function clearReportError() {
+    setErrorKind(null);
+    setErrorMessage(null);
+  }
+
+  function showReportError(kind: "load" | "generate" | "other", message: string) {
+    setErrorKind(kind);
+    setErrorMessage(message);
+  }
 
   const load = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -71,21 +232,31 @@ export default function ReportEditor({ id }: { id: number }) {
     setReport(loaded);
     setSections(stashed ?? sectionsFromReport(loaded));
     setRestored(stashed !== null);
+    try {
+      const vendors = await fetchAllVendors(accessToken);
+      setVendorNames(new Map(vendors.map((vendor) => [vendor.id, vendor.name])));
+    } catch {
+      setVendorNames(new Map());
+    }
   }, [getAccessToken, id]);
 
   useEffect(() => {
     load().catch((error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to load report");
+      showReportError(
+        "load",
+        error instanceof Error ? error.message : "Failed to load report"
+      );
     });
   }, [load]);
 
   const isDraft = report?.status === "Draft";
   const locked = !isDraft || busy !== null;
+  const hasAutoGeneratedRef = useRef(false);
 
   async function handleSave() {
     if (!isDraft || busy) return;
     setBusy("saving");
-    setErrorMessage(null);
+    clearReportError();
     try {
       const accessToken = await getAccessToken();
       const result = await updateReportSections(id, sections, accessToken);
@@ -95,7 +266,7 @@ export default function ReportEditor({ id }: { id: number }) {
           await instance.loginRedirect({ scopes: [API_SCOPE] });
           return;
         }
-        setErrorMessage(resolveReportActionFailureMessage(result.code));
+        showReportError("other", resolveReportActionFailureMessage(result.code));
         return;
       }
       clearDraftFields(id, window.sessionStorage);
@@ -103,8 +274,9 @@ export default function ReportEditor({ id }: { id: number }) {
       const refreshed = await fetchReport(id, accessToken);
       setReport(refreshed);
       setSections(sectionsFromReport(refreshed));
+      setIsEditing(false);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to save report");
+      showReportError("other", error instanceof Error ? error.message : "Failed to save report");
     } finally {
       setBusy(null);
     }
@@ -112,13 +284,14 @@ export default function ReportEditor({ id }: { id: number }) {
 
   async function handleGenerate() {
     if (!isDraft || busy) return;
+    setConfirmingGenerate(false);
     setBusy("generating");
-    setErrorMessage(null);
+    clearReportError();
     try {
       const accessToken = await getAccessToken();
       const result = await generateReport(id, accessToken);
       if (result.outcome === "error") {
-        setErrorMessage(resolveReportActionFailureMessage(result.code));
+        showReportError("generate", resolveReportActionFailureMessage(result.code));
         return;
       }
       clearDraftFields(id, window.sessionStorage);
@@ -126,30 +299,95 @@ export default function ReportEditor({ id }: { id: number }) {
       const refreshed = await fetchReport(id, accessToken);
       setReport(refreshed);
       setSections(sectionsFromReport(refreshed));
+      setIsEditing(false);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to generate report");
+      showReportError(
+        "generate",
+        error instanceof Error ? error.message : "Failed to generate report"
+      );
     } finally {
       setBusy(null);
     }
   }
 
+  // Auto-trigger the first generation attempt when arriving fresh from
+  // Create Report. This calls handleGenerate() directly, so that first run
+  // does not ask for confirmation. A later click on Generate confirms when
+  // any section already has text.
+  useEffect(() => {
+    if (!report || hasAutoGeneratedRef.current) return;
+    const shouldAutoGenerate = consumeAutoGenerateFlag(report.id, window.sessionStorage);
+    if (!shouldAutoGenerate) return;
+    hasAutoGeneratedRef.current = true;
+    handleGenerate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report]);
+
+  useEffect(() => {
+    if (!report || appliedEditFlag.current) return;
+    appliedEditFlag.current = true;
+    if (startInEdit && report.status === "Draft") {
+      setEditBaseline(sections);
+      setIsEditing(true);
+    }
+  }, [report, sections, startInEdit]);
+
+  const confirmOpen = confirmingFinalize || confirmingGenerate;
+
+  useEffect(() => {
+    if (!confirmOpen || busy !== null) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setConfirmingFinalize(false);
+        setConfirmingGenerate(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    confirmRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmOpen, busy]);
+
+  function requestGenerate() {
+    if (sectionsHaveText(sections)) {
+      setConfirmingFinalize(false);
+      setConfirmingGenerate(true);
+      return;
+    }
+    handleGenerate();
+  }
+
+  function beginEdit() {
+    setConfirmingFinalize(false);
+    setConfirmingGenerate(false);
+    setEditBaseline(sections);
+    setIsEditing(true);
+  }
+
+  function cancelEdit() {
+    if (editBaseline) {
+      setSections(editBaseline);
+    }
+    setIsEditing(false);
+  }
+
   async function handleFinalize() {
     if (!isDraft || busy) return;
     setBusy("finalizing");
-    setErrorMessage(null);
+    clearReportError();
     try {
       const accessToken = await getAccessToken();
       const result = await finalizeReport(id, accessToken);
       if (result.outcome === "error") {
-        setErrorMessage(resolveReportActionFailureMessage(result.code));
+        showReportError("other", resolveReportActionFailureMessage(result.code));
         return;
       }
       clearDraftFields(id, window.sessionStorage);
+      setConfirmingFinalize(false);
       const refreshed = await fetchReport(id, accessToken);
       setReport(refreshed);
       setSections(sectionsFromReport(refreshed));
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to finalize report");
+      showReportError("other", error instanceof Error ? error.message : "Failed to finalize report");
     } finally {
       setBusy(null);
     }
@@ -158,12 +396,12 @@ export default function ReportEditor({ id }: { id: number }) {
   async function handleExport(format: "pdf" | "docx") {
     if (report?.status !== "Finalized" || busy) return;
     setBusy("exporting");
-    setErrorMessage(null);
+    clearReportError();
     try {
       const accessToken = await getAccessToken();
       const result = await exportReport(id, format, accessToken);
       if (result.outcome === "error") {
-        setErrorMessage(resolveReportActionFailureMessage(result.code));
+        showReportError("other", resolveReportActionFailureMessage(result.code));
         return;
       }
       const url = URL.createObjectURL(result.blob);
@@ -173,33 +411,72 @@ export default function ReportEditor({ id }: { id: number }) {
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to export report");
+      showReportError("other", error instanceof Error ? error.message : "Failed to export report");
     } finally {
       setBusy(null);
     }
   }
 
   if (!report && !errorMessage) {
-    return <p className="text-sm text-foreground-muted">Loading report…</p>;
+    return <LoadingIndicator label="Loading report…" />;
   }
 
   if (!report) {
-    return <p className="text-sm text-danger">{errorMessage}</p>;
+    return (
+      <ErrorBanner
+        message={errorMessage ?? "Failed to load report"}
+        action={
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              clearReportError();
+              load().catch((error) => {
+                showReportError(
+                  "load",
+                  error instanceof Error ? error.message : "Failed to load report"
+                );
+              });
+            }}
+          >
+            Retry
+          </Button>
+        }
+      />
+    );
   }
 
+  const readyToFinalize = validateReportReadyToFinalize(sections).valid;
+  const periodStart = periodDate(report.period_start);
+  const periodEnd = periodDate(report.period_end);
+
   return (
-    <div className="flex max-w-3xl flex-col gap-8">
-      <div>
-        <Link href="/reports" className="text-sm font-medium text-accent hover:underline">
-          ← Back to reports
+    <div
+      className={
+        busy === "generating"
+          ? "flex w-full max-w-3xl flex-col gap-8"
+          : "grid w-full grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,1fr)] lg:gap-x-10"
+      }
+    >
+      <div className="w-full min-w-0 lg:col-start-1 lg:row-start-1">
+        <Link
+          href="/reports"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-accent transition-colors duration-150 ease-out hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+          Back to reports
         </Link>
-        <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground">
-          {report.reference_number}
-        </h1>
-        <p className="mt-2 text-sm text-foreground-muted">
-          {report.period_type} · {String(report.period_start).slice(0, 10)} to{" "}
-          {String(report.period_end).slice(0, 10)} · {report.status}
-        </p>
+        <header className="mt-4 w-full min-w-0 border-b border-border bg-surface-muted px-5 py-5">
+          <h1 className="font-display text-4xl font-medium text-foreground">
+            {report.reference_number}
+          </h1>
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm leading-snug text-foreground-muted">
+            <span>
+              {report.period_type} · {periodStart} to {periodEnd}
+            </span>
+            <StatusBadge status={report.status} />
+          </p>
+        </header>
       </div>
 
       {restored && (
@@ -207,111 +484,430 @@ export default function ReportEditor({ id }: { id: number }) {
           Restored unsaved section text from this browser session.
         </p>
       )}
-      {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
-
-      {SECTIONS.map((section) => (
-        <label key={section.key} className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-foreground">{section.label}</span>
-          <textarea
-            value={sections[section.key]}
-            disabled={locked}
-            rows={6}
-            onChange={(event) =>
-              setSections((current) => ({ ...current, [section.key]: event.target.value }))
-            }
-            className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground disabled:opacity-60"
-          />
-        </label>
-      ))}
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-foreground">Metrics</h2>
-        {(report.metrics ?? []).length === 0 ? (
-          <p className="text-sm text-foreground-muted">No metrics yet. Generate the report first.</p>
-        ) : (
-          <div className="overflow-x-auto rounded border border-border">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left">
-                  <th className="px-3 py-2">Vendor</th>
-                  <th className="px-3 py-2">Period</th>
-                  <th className="px-3 py-2">On time %</th>
-                  <th className="px-3 py-2">Avg delay</th>
-                  <th className="px-3 py-2">Txns</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(report.metrics ?? []).map((metric: ReportMetric) => (
-                  <tr
-                    key={`${metric.vendor_id}-${metric.period_start}`}
-                    className="border-b border-border"
-                  >
-                    <td className="px-3 py-2">{metric.vendor_id}</td>
-                    <td className="px-3 py-2">
-                      {String(metric.period_start).slice(0, 10)} –{" "}
-                      {String(metric.period_end).slice(0, 10)}
-                    </td>
-                    <td className="px-3 py-2">{formatMetric(metric.on_time_delivery_rate)}</td>
-                    <td className="px-3 py-2">{formatMetric(metric.avg_delay_days)}</td>
-                    <td className="px-3 py-2">{metric.transaction_count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {busy === "generating" && (
-        <LoadingIndicator label="Generating the report…" />
+      {errorMessage && busy !== "generating" && (
+        <ErrorBanner
+          message={errorMessage}
+          action={
+            errorKind === "generate" ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy !== null}
+                onClick={handleGenerate}
+              >
+                Retry
+              </Button>
+            ) : undefined
+          }
+        />
       )}
 
-      <div className="flex flex-wrap gap-3">
-        {isDraft && (
-          <>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={handleSave}
-              className="rounded border border-border px-4 py-2 text-sm"
-            >
-              {busy === "saving" ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={handleGenerate}
-              className="rounded bg-accent px-4 py-2 text-sm text-accent-foreground disabled:opacity-60"
-            >
-              {busy === "generating" ? "Generating…" : "Generate"}
-            </button>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={handleFinalize}
-              className="rounded border border-border px-4 py-2 text-sm"
-            >
-              {busy === "finalizing" ? "Finalizing…" : "Finalize"}
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          disabled={report.status !== "Finalized" || busy !== null}
-          onClick={() => handleExport("pdf")}
-          className="rounded border border-border px-4 py-2 text-sm disabled:opacity-60"
-        >
-          Export PDF
-        </button>
-        <button
-          type="button"
-          disabled={report.status !== "Finalized" || busy !== null}
-          onClick={() => handleExport("docx")}
-          className="rounded border border-border px-4 py-2 text-sm disabled:opacity-60"
-        >
-          Export Word
-        </button>
-      </div>
+      {busy === "generating" ? (
+        <div className="flex min-h-[24rem] flex-col items-center justify-center gap-6 rounded border border-border bg-surface px-6 py-16">
+          <GeneratingAnimation />
+          <div className="flex w-full max-w-md flex-col items-center gap-4">
+            <GeneratingPhrases />
+            <ProgressBar motion="pendulum" />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex min-w-0 flex-col lg:col-start-1 lg:row-start-2">
+            {isDraft && !isEditing && (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy !== null}
+                onClick={beginEdit}
+                icon={<Pencil className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+                className="mb-8 self-start"
+              >
+                Edit
+              </Button>
+            )}
+
+            {SECTIONS.map((section, index) => {
+              const paragraphs = proseParagraphs(sections[section.key]);
+              return (
+                <section
+                  key={section.key}
+                  className={
+                    index === 0
+                      ? "flex flex-col gap-4"
+                      : "mt-10 flex flex-col gap-4 border-t border-border pt-10"
+                  }
+                >
+                  <h2 className="font-display text-2xl font-medium text-foreground">
+                    {section.label}
+                  </h2>
+                  {isEditing ? (
+                    <textarea
+                      value={sections[section.key]}
+                      disabled={locked}
+                      rows={8}
+                      aria-label={section.label}
+                      onChange={(event) =>
+                        setSections((current) => ({
+                          ...current,
+                          [section.key]: event.target.value,
+                        }))
+                      }
+                      className="max-w-[65ch] rounded border border-border bg-surface px-3 py-2 text-base leading-relaxed text-foreground disabled:opacity-60"
+                    />
+                  ) : paragraphs.length === 0 ? (
+                    <p className="max-w-[65ch] text-base leading-relaxed text-foreground-muted">
+                      Not written yet.
+                    </p>
+                  ) : (
+                    <div className="flex max-w-[65ch] flex-col gap-5">
+                      {paragraphs.map((paragraph, index) => (
+                        <p
+                          key={index}
+                          className="whitespace-pre-wrap text-base leading-relaxed text-foreground"
+                        >
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+
+            {isEditing && (
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={busy !== null}
+                  isLoading={busy === "saving"}
+                  onClick={handleSave}
+                  icon={<Save className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+                >
+                  {busy === "saving" ? "Saving…" : "Save"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={busy !== null}
+                  onClick={cancelEdit}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <section className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-0 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:max-h-[calc(100dvh-6.5rem)] lg:self-start lg:overflow-y-auto">
+            <h2 className="font-display text-2xl font-medium text-foreground">Metrics</h2>
+            {(report.metrics ?? []).length === 0 ? (
+              <p className="text-sm text-foreground-muted">
+                No metrics yet. Generate writes the four sections from these figures.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start gap-3 rounded border border-info/30 bg-info-soft px-4 py-3">
+                <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-info" />
+                  <p id="metrics-legend" className="text-sm leading-relaxed text-foreground">
+                    Computed from recorded transactions. A dash means that metric had no eligible
+                    transactions.
+                  </p>
+                </div>
+                <div className="overflow-x-auto min-w-0 w-full rounded border border-border bg-surface">
+                <table aria-describedby="metrics-legend" className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-surface-muted text-left">
+                      <th
+                        scope="col"
+                        rowSpan={2}
+                        className="sticky left-0 z-20 border-r border-border bg-surface-muted px-5 py-3 align-bottom text-xs font-medium text-foreground"
+                      >
+                        Vendor
+                      </th>
+                      <th
+                        scope="col"
+                        rowSpan={2}
+                        className="px-5 py-3 align-bottom text-xs font-medium text-foreground"
+                      >
+                        Period
+                      </th>
+                      <th
+                        scope="colgroup"
+                        colSpan={2}
+                        className="border-l border-border px-5 py-2 text-center text-xs font-medium uppercase tracking-wide text-foreground-muted"
+                      >
+                        Delivery
+                      </th>
+                      <th
+                        scope="colgroup"
+                        colSpan={3}
+                        className="border-l border-border px-5 py-2 text-center text-xs font-medium uppercase tracking-wide text-foreground-muted"
+                      >
+                        Pricing
+                      </th>
+                      <th
+                        scope="colgroup"
+                        colSpan={4}
+                        className="border-l border-border px-5 py-2 text-center text-xs font-medium uppercase tracking-wide text-foreground-muted"
+                      >
+                        Order accuracy
+                      </th>
+                      <th
+                        scope="col"
+                        rowSpan={2}
+                        className="border-l border-border px-5 py-3 text-right align-bottom text-xs font-medium text-foreground"
+                      >
+                        Txns
+                      </th>
+                    </tr>
+                    <tr className="border-b border-border bg-surface text-left">
+                      <th scope="col" className="whitespace-nowrap border-l border-border px-5 py-2 text-xs font-normal text-foreground-muted">
+                        On time %
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-5 py-2 text-xs font-normal text-foreground-muted">
+                        Avg delay (days)
+                      </th>
+                      <th scope="col" className="whitespace-nowrap border-l border-border px-5 py-2 text-xs font-normal text-foreground-muted">
+                        Overcharge %
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-5 py-2 text-xs font-normal text-foreground-muted">
+                        Avg overcharge %
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-5 py-2 text-xs font-normal text-foreground-muted">
+                        Undercharge %
+                      </th>
+                      <th scope="col" className="whitespace-nowrap border-l border-border px-5 py-2 text-xs font-normal text-foreground-muted">
+                        Shortfall %
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-5 py-2 text-xs font-normal text-foreground-muted">
+                        Avg shortfall (units)
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-5 py-2 text-xs font-normal text-foreground-muted">
+                        Over-delivery %
+                      </th>
+                      <th scope="col" className="whitespace-nowrap px-5 py-2 text-xs font-normal text-foreground-muted">
+                        Avg over-delivery (units)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report.metrics ?? []).map((metric: ReportMetric, index) => {
+                      const row = metricRowClasses(index % 2 === 1);
+                      return (
+                      <tr
+                        key={`${metric.vendor_id}-${metric.period_start}`}
+                        className={`group border-b border-border last:border-b-0 ${row.row}`}
+                      >
+                        <td
+                          className={`sticky left-0 z-10 max-w-[16rem] break-words border-r border-border px-5 py-4 font-semibold text-foreground ${row.sticky}`}
+                        >
+                          {vendorNames.get(metric.vendor_id) ?? "Unknown vendor"}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 tabular-nums text-foreground-muted">
+                          {periodDate(metric.period_start)} to {periodDate(metric.period_end)}
+                        </td>
+                        <td className="whitespace-nowrap border-l border-border px-5 py-4">
+                          <MetricValue
+                            value={metric.on_time_delivery_rate}
+                            className={metricClass("on_time_delivery_rate", metric.on_time_delivery_rate)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <MetricValue
+                            value={metric.avg_delay_days}
+                            className={metricClass("avg_delay_days", metric.avg_delay_days)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap border-l border-border px-5 py-4">
+                          <MetricValue
+                            value={metric.overcharge_rate}
+                            className={metricClass("overcharge_rate", metric.overcharge_rate)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <MetricValue
+                            value={metric.avg_overcharge_pct}
+                            className={metricClass("avg_overcharge_pct", metric.avg_overcharge_pct)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <MetricValue value={metric.undercharge_rate} className="text-foreground-muted" />
+                        </td>
+                        <td className="whitespace-nowrap border-l border-border px-5 py-4">
+                          <MetricValue
+                            value={metric.shortfall_rate}
+                            className={metricClass("shortfall_rate", metric.shortfall_rate)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <MetricValue
+                            value={metric.avg_shortfall_units}
+                            className={metricClass("avg_shortfall_units", metric.avg_shortfall_units)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <MetricValue
+                            value={metric.overdelivery_rate}
+                            className={metricClass("overdelivery_rate", metric.overdelivery_rate)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <MetricValue
+                            value={metric.avg_overdelivery_units}
+                            className={metricClass("avg_overdelivery_units", metric.avg_overdelivery_units)}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap border-l border-border px-5 py-4 text-right tabular-nums text-foreground">
+                          {metric.transaction_count}
+                        </td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {(isDraft && !isEditing) || report.status === "Finalized" ? (
+          <div className="flex min-w-0 flex-col items-start gap-8 lg:col-start-1 lg:row-start-3">
+          {isDraft && !isEditing && (
+            <div className="flex flex-col items-start gap-3">
+              {!confirmingGenerate && !confirmingFinalize && (
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    variant={readyToFinalize ? "secondary" : "primary"}
+                    disabled={busy !== null}
+                    onClick={requestGenerate}
+                  >
+                    Generate
+                  </Button>
+                  {readyToFinalize && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        setConfirmingGenerate(false);
+                        setConfirmingFinalize(true);
+                      }}
+                    >
+                      Finalize
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {confirmingGenerate && (
+                <div
+                  ref={confirmRef}
+                  tabIndex={-1}
+                  role="region"
+                  aria-label="Confirm generate"
+                  className="flex max-w-[65ch] flex-col gap-3 rounded border border-border bg-surface px-4 py-4 outline-none"
+                >
+                  <p className="text-sm leading-relaxed text-foreground">
+                    Generate again for {report.reference_number}? This replaces Vendor Summary,
+                    Delivery Performance, Pricing Analysis, and Order Accuracy.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={busy !== null}
+                      onClick={handleGenerate}
+                    >
+                      Generate
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      onClick={() => setConfirmingGenerate(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {confirmingFinalize && (
+                <div
+                  ref={confirmRef}
+                  tabIndex={-1}
+                  role="region"
+                  aria-label="Confirm finalize"
+                  className="flex max-w-[65ch] flex-col gap-3 rounded border border-border bg-surface px-4 py-4 outline-none"
+                >
+                  <p className="text-sm leading-relaxed text-foreground">
+                    Finalize {report.reference_number}? This report covers {periodStart} to{" "}
+                    {periodEnd}. After you finalize, it cannot be edited or deleted.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={busy !== null}
+                      isLoading={busy === "finalizing"}
+                      onClick={handleFinalize}
+                    >
+                      {busy === "finalizing" ? "Finalizing…" : "Finalize report"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      onClick={() => setConfirmingFinalize(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!readyToFinalize && !confirmingGenerate && !confirmingFinalize && (
+                <p className="max-w-[65ch] text-sm leading-relaxed text-foreground-muted">
+                  Write all four sections before finalizing. You can export PDF or Word after the report is finalized.
+                </p>
+              )}
+              {readyToFinalize && !confirmingFinalize && !confirmingGenerate && (
+                <p className="max-w-[65ch] text-sm leading-relaxed text-foreground-muted">
+                  Export PDF and Word after this report is finalized.
+                </p>
+              )}
+            </div>
+          )}
+
+          {report.status === "Finalized" && (
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy !== null}
+                isLoading={busy === "exporting"}
+                onClick={() => handleExport("pdf")}
+                icon={<Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+              >
+                Export PDF
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy !== null}
+                isLoading={busy === "exporting"}
+                onClick={() => handleExport("docx")}
+                icon={<Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+              >
+                Export Word
+              </Button>
+            </div>
+          )}
+          </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

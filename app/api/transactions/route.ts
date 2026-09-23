@@ -3,19 +3,14 @@ import { withAuth } from "../../../lib/withAuth";
 import { validateTransactionInput } from "../../../lib/domain/transactions/validateTransactionInput";
 import { insertTransaction, getTransactions} from "@/lib/repositories/transactions";
 import { getVendorById } from "@/lib/repositories/vendors";
+import { parsePageParams } from "../../../lib/pagination/parsePageParams";
 
 function parseOptionalPositiveInt(raw: string | null): { ok: true; value?: number } | { ok: false } {
     if (raw === null) return { ok: true, value: undefined };
     const parsed = Number(raw);
     if (!Number.isInteger(parsed) || parsed <= 0) return { ok: false };
     return { ok: true, value: parsed };
-}  
-function parseOptionalNonNegativeInt(raw: string | null): { ok: true; value?: number } | { ok: false } {
-    if (raw === null) return { ok: true, value: undefined };
-    const parsed = Number(raw);
-    if (!Number.isInteger(parsed) || parsed < 0) return { ok: false };
-    return { ok: true, value: parsed };
-  }
+}
   
 export const POST =  withAuth(async (request) => {
     const body = await request.json();
@@ -50,26 +45,19 @@ export const GET = withAuth(async (request) => {
       { status: 400 }
     );
   }
-  const limit = parseOptionalNonNegativeInt(params.get("limit"));
-  if (!limit.ok) {
+  const page = parsePageParams(params);
+  if (!page.ok) {
     return NextResponse.json(
-      { error: "limit must be a non-negative integer", code: "VALIDATION_FAILED", field: "limit" },
+      { error: page.error, code: "VALIDATION_FAILED", field: page.field },
       { status: 400 }
     );
   }
-  const offset = parseOptionalNonNegativeInt(params.get("offset"));
-  if (!offset.ok) {
-    return NextResponse.json(
-      { error: "offset must be a non-negative integer", code: "VALIDATION_FAILED", field: "offset" },
-      { status: 400 }
-    );
-  }
-  const transactions = await getTransactions({
+  const result = await getTransactions({
     vendor_id: vendorId.value,
     dateFrom: params.get("dateFrom") ?? undefined,
     dateTo: params.get("dateTo") ?? undefined,
-    limit: limit.value,
-    offset: offset.value,
+    limit: page.limit,
+    offset: page.offset,
   });
-  return NextResponse.json({ transactions });
+  return NextResponse.json(result);
 });

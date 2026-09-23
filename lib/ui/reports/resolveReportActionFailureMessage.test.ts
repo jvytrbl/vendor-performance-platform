@@ -26,6 +26,13 @@ describe("resolveReportActionFailureMessage", () => {
     );
   });
 
+  it("maps NARRATIVE_VALIDATION_FAILED without asking the user to edit empty sections", () => {
+    const message = resolveReportActionFailureMessage("NARRATIVE_VALIDATION_FAILED");
+    expect(message).toContain("Nothing was saved");
+    expect(message).toContain("Generate again");
+    expect(message).not.toContain("review and edit");
+  });
+
   it("maps unknown code to generic message", () => {
     expect(resolveReportActionFailureMessage("UNKNOWN_ERROR")).toBe(
       "An error occurred. Please try again."

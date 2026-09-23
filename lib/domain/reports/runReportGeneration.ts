@@ -4,6 +4,7 @@ import type { GenerateContent } from "../../ai/generateReportNarrative";
 import { generateReportNarrative } from "../../ai/generateReportNarrative";
 import { buildMetricPromptData } from "./buildMetricPromptData";
 import { computeVendorPeriodMetrics } from "./computeVendorPeriodMetrics";
+import { parseNarrativeSections } from "./parseNarrativeSections";
 import { validateNarrativeNumbers } from "./validateNarrativeNumbers";
 import { validateNarrativeComparisons } from "./validateNarrativeComparisons";
 
@@ -58,6 +59,7 @@ function toMetricRow(
 
 export async function runReportGeneration(input: {
   vendorIds: number[];
+  vendorNames: Map<number, string>;
   currentPeriod: { periodStart: string; periodEnd: string };
   priorPeriod: { periodStart: string; periodEnd: string };
   currentTxs: TransactionRecord[];
@@ -73,7 +75,7 @@ export async function runReportGeneration(input: {
     metrics: computeVendorPeriodMetrics(txsForVendor(input.priorTxs, vendorId)),
   }));
 
-  const promptData: Record<string, number | null> = {};
+  const promptData: Record<string, number | string | null> = {};
   for (const current of currentByVendor) {
     const prior = priorByVendor.find((row) => row.vendorId === current.vendorId)!;
     const built = buildMetricPromptData({
@@ -82,6 +84,11 @@ export async function runReportGeneration(input: {
       prior: prior.metrics,
       peers: currentByVendor,
     });
+    // The model can only refer to vendors by what's actually in the data it
+    // receives — without this, it has nothing but the numeric ID and falls
+    // back to writing "Vendor 7" in the narrative.
+    promptData[`vendor${current.vendorId}_name`] =
+      input.vendorNames.get(current.vendorId) ?? `Vendor ${current.vendorId}`;
     for (const [key, value] of Object.entries(built)) {
       promptData[`vendor${current.vendorId}_${key}`] = value;
     }
@@ -110,28 +117,51 @@ export async function runReportGeneration(input: {
     for (let attempt = 0; attempt < MAX_NARRATIVE_ATTEMPTS; attempt += 1) {
       const narrative = await generateReportNarrative(promptData, input.generateContent);
       if (narrative.trim() === "") {
+        console.warn(`[runReportGeneration] attempt ${attempt + 1}: model returned an empty narrative`);
         continue;
       }
-      const numbers = validateNarrativeNumbers(narrative, promptData);
+      const sections = parseNarrativeSections(narrative);
+      if (!sections) {
+        console.warn(
+          `[runReportGeneration] attempt ${attempt + 1}: narrative was not four distinct sections`
+        );
+        continue;
+      }
+      const sectionTexts = [
+        sections.vendor_summary,
+        sections.delivery_performance,
+        sections.pricing_analysis,
+        sections.order_accuracy,
+      ];
+      const numbers = validateNarrativeNumbers(sectionTexts.join("\n"), promptData);
       if (!numbers.valid) {
+        console.warn(
+          `[runReportGeneration] attempt ${attempt + 1}: narrative number validation failed`,
+          { unmatchedValues: numbers.unmatchedValues, narrative }
+        );
         continue;
       }
-      const comparisons = validateNarrativeComparisons(narrative);
-      if (!comparisons.valid) {
+      const failedComparison = sectionTexts.find(
+        (text) => !validateNarrativeComparisons(text).valid
+      );
+      if (failedComparison) {
+        console.warn(
+          `[runReportGeneration] attempt ${attempt + 1}: narrative comparison validation failed`,
+          { narrative }
+        );
         continue;
       }
       return {
         ok: true,
-        sections: {
-          vendor_summary: narrative,
-          delivery_performance: narrative,
-          pricing_analysis: narrative,
-          order_accuracy: narrative,
-        },
+        sections,
         metrics,
       };
     }
-  } catch {
+  } catch (error) {
+    console.error(
+      "[runReportGeneration] generation threw before validation could run",
+      error
+    );
     return {
       ok: false,
       error: "AI generation failed; nothing was saved",

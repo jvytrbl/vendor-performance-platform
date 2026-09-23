@@ -58,7 +58,7 @@ export async function insertTransaction(
 
 export async function getTransactions(
   filters: TransactionFilters = {}
-): Promise<TransactionRecord[]> {
+): Promise<{ transactions: TransactionRecord[]; total: number }> {
   const { vendor_id, dateFrom, dateTo } = filters;
   const limit = Math.min(filters.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
   const offset = filters.offset ?? 0;
@@ -89,6 +89,13 @@ export async function getTransactions(
   request.input("limit", limit);
 
   const result = await request.query(
+    `SELECT COUNT(*) AS total
+     FROM VENDOR_TRANSACTIONS
+     ${whereClause}`
+  );
+  const total = Number(result.recordset[0]?.total ?? 0);
+
+  const page = await request.query(
     `SELECT id, vendor_id, transaction_date, item_description, agreed_price, actual_price,
             agreed_delivery_date, actual_delivery_date, quantity_ordered, quantity_received, created_at
      FROM VENDOR_TRANSACTIONS
@@ -97,7 +104,7 @@ export async function getTransactions(
      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
   );
 
-  return result.recordset;
+  return { transactions: page.recordset, total };
 }
 
 export async function getTransactionsForPeriod(

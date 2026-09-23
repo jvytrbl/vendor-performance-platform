@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST, GET } from "./route";
 import { validateAuthHeader } from "../../../lib/auth";
-import { insertReport, getReports } from "@/lib/repositories/reports";
+import { insertReport, listReports } from "@/lib/repositories/reports";
 import { getVendorById } from "@/lib/repositories/vendors";
 
 vi.mock("../../../lib/auth", () => ({
@@ -10,16 +10,12 @@ vi.mock("../../../lib/auth", () => ({
 
 vi.mock("@/lib/repositories/reports", () => ({
   insertReport: vi.fn(),
+  listReports: vi.fn(),
 }));
 
 vi.mock("@/lib/repositories/vendors", () => ({
   getVendorById: vi.fn(),
 }));
-
-vi.mock("@/lib/repositories/reports", () => ({
-    insertReport: vi.fn(),
-    getReports: vi.fn(),
-  }));
 
 const validBody = {
   period_type: "Quarterly",
@@ -175,24 +171,28 @@ describe("GET /api/reports", () => {
           code: "UNAUTHORIZED",
         });
       });
-      it("returns Draft and Finalized reports", async () => {
+      it("returns the first page of 15 reports and the total when no page params are given", async () => {
         vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
-        vi.mocked(getReports).mockResolvedValue([
-          {
-            id: 2,
-            reference_number: "VPR-20260401-222222",
-            period_type: "Custom",
-            period_start: "2026-04-01",
-            period_end: "2026-04-30",
-            status: "Draft",
-            created_at: "2026-05-01T00:00:00.000Z",
-          },
-        ]);
+        vi.mocked(listReports).mockResolvedValue({
+          reports: [
+            {
+              id: 2,
+              reference_number: "VPR-20260401-222222",
+              period_type: "Custom",
+              period_start: "2026-04-01",
+              period_end: "2026-04-30",
+              status: "Draft",
+              created_at: "2026-05-01T00:00:00.000Z",
+            },
+          ],
+          total: 1,
+        });
         const request = new Request("http://localhost/api/reports", {
           headers: { Authorization: "Bearer good.token" },
         });
         const response = await GET(request);
         const body = await response.json();
+        expect(listReports).toHaveBeenCalledWith({ limit: 15, offset: 0 });
         expect(response.status).toBe(200);
         expect(body).toEqual({
           reports: [
@@ -206,6 +206,38 @@ describe("GET /api/reports", () => {
               created_at: "2026-05-01T00:00:00.000Z",
             },
           ],
+          total: 1,
+        });
+      });
+
+      it("returns an empty page with the total when the requested page is past the last page", async () => {
+        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(listReports).mockResolvedValue({ reports: [], total: 31 });
+        const response = await GET(
+          new Request("http://localhost/api/reports?page=4&pageSize=15", {
+            headers: { Authorization: "Bearer good.token" },
+          })
+        );
+        const body = await response.json();
+        expect(listReports).toHaveBeenCalledWith({ limit: 15, offset: 45 });
+        expect(response.status).toBe(200);
+        expect(body).toEqual({ reports: [], total: 31 });
+      });
+
+      it("returns 400 when pageSize is not a positive integer", async () => {
+        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        const response = await GET(
+          new Request("http://localhost/api/reports?pageSize=0", {
+            headers: { Authorization: "Bearer good.token" },
+          })
+        );
+        const body = await response.json();
+        expect(listReports).not.toHaveBeenCalled();
+        expect(response.status).toBe(400);
+        expect(body).toEqual({
+          error: "pageSize must be a positive integer up to 200",
+          code: "VALIDATION_FAILED",
+          field: "pageSize",
         });
       });
 });

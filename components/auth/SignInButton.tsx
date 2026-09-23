@@ -24,7 +24,7 @@ export default function SignInButton() {
     return (
       <div className="flex items-center gap-3">
         <span
-          className="max-w-[16rem] truncate text-sm text-foreground-muted"
+          className="max-w-[7rem] truncate text-sm text-foreground-muted sm:max-w-[16rem]"
           title={account.username}
         >
           {account.username}
@@ -32,7 +32,7 @@ export default function SignInButton() {
         <button
           type="button"
           onClick={handleSignOut}
-          className="rounded border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground hover:bg-canvas"
+          className="inline-flex min-h-11 items-center rounded border border-border bg-surface px-3 text-sm font-medium text-foreground hover:bg-canvas"
         >
           Log out
         </button>
@@ -44,7 +44,7 @@ export default function SignInButton() {
     <button
       type="button"
       onClick={handleSignIn}
-      className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
+      className="inline-flex min-h-11 items-center rounded bg-accent px-4 text-sm font-medium text-accent-foreground hover:bg-accent-hover"
     >
       Log in
     </button>

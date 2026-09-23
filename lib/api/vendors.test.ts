@@ -17,7 +17,7 @@ beforeEach(() => {
 describe("fetchVendors", () => {
   it("returns the vendor list on success", async () => {
     vi.mocked(fetch).mockResolvedValue(
-      mockResponse(200, { vendors: [{ id: 1, name: "Acme Trading" }] })
+      mockResponse(200, { vendors: [{ id: 1, name: "Acme Trading" }], total: 1 })
     );
 
     const result = await fetchVendors("good.token");
@@ -25,7 +25,7 @@ describe("fetchVendors", () => {
     expect(fetch).toHaveBeenCalledWith("/api/vendors", {
       headers: { Authorization: "Bearer good.token" },
     });
-    expect(result).toEqual([{ id: 1, name: "Acme Trading" }]);
+    expect(result).toEqual({ vendors: [{ id: 1, name: "Acme Trading" }], total: 1 });
   });
 
   it("throws with the server's error message when the request fails", async () => {

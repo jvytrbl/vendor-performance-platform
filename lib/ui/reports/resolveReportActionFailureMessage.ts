@@ -6,7 +6,7 @@ export function resolveReportActionFailureMessage(code: string): string {
     AI_UNAVAILABLE:
       "The AI narrative service is temporarily unavailable. Please try again in a moment.",
     NARRATIVE_VALIDATION_FAILED:
-      "The generated narrative did not pass validation. Please review and edit the sections, then try again.",
+      "Generation was rejected because a number or a comparison did not match the computed data. Nothing was saved. Generate again.",
     REPORT_NOT_FINALIZED:
       "This report must be finalized before you can export it.",
     DUPLICATE_METRICS:

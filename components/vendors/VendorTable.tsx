@@ -1,11 +1,15 @@
 "use client";
 
+import { PackageSearch } from "lucide-react";
 import type { VendorRecord } from "@/lib/api/vendors";
 import { formatVendorForTable } from "@/lib/ui/vendors/formatVendorForTable";
+import { pageRowNumber } from "@/components/ui/TablePagination";
 import VendorRow from "./VendorRow";
 
 interface VendorTableProps {
   vendors: VendorRecord[];
+  page: number;
+  pageSize: number;
   onDelete: (id: number) => void;
   deletingId?: number | null;
   emptyMessage: string;
@@ -13,6 +17,8 @@ interface VendorTableProps {
 
 export default function VendorTable({
   vendors,
+  page,
+  pageSize,
   onDelete,
   deletingId,
   emptyMessage,
@@ -20,9 +26,10 @@ export default function VendorTable({
   if (vendors.length === 0) {
     return (
       <div className="overflow-x-auto min-w-0 w-full rounded border border-border bg-surface">
-        <p className="py-16 text-center text-sm text-foreground-muted">
-          {emptyMessage}
-        </p>
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <PackageSearch className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} aria-hidden="true" />
+          <p className="text-base text-foreground-muted">{emptyMessage}</p>
+        </div>
       </div>
     );
   }
@@ -59,7 +66,7 @@ export default function VendorTable({
             <VendorRow
               key={row.id}
               row={row}
-              index={index + 1}
+              index={pageRowNumber(page, pageSize, index)}
               onDelete={onDelete}
               isDeleting={deletingId === row.id}
             />

@@ -8,9 +8,11 @@ import {
   clearGenerationStatus,
 } from "@/lib/repositories/reports";
 import { getTransactionsForPeriod } from "@/lib/repositories/transactions";
+import { getVendorsByIds } from "@/lib/repositories/vendors";
 import {
   geminiGenerateContent,
   RateLimitError,
+  ServiceUnavailableError,
 } from "../../../../../lib/ai/geminiGenerateContent";
 
 vi.mock("../../../../../lib/auth", () => ({
@@ -26,6 +28,10 @@ vi.mock("@/lib/repositories/reports", () => ({
 
 vi.mock("@/lib/repositories/transactions", () => ({
   getTransactionsForPeriod: vi.fn(),
+}));
+
+vi.mock("@/lib/repositories/vendors", () => ({
+  getVendorsByIds: vi.fn(),
 }));
 
 vi.mock("../../../../../lib/ai/geminiGenerateContent", async (importOriginal) => {
@@ -65,12 +71,27 @@ const currentTx = {
   quantity_received: 10,
 };
 
+const acceptedNarrative = [
+  "Vendor Summary:",
+  "This period covers the selected vendor.",
+  "",
+  "Delivery Performance:",
+  "On-time delivery was 100.",
+  "",
+  "Pricing Analysis:",
+  "Agreed and actual prices match.",
+  "",
+  "Order Accuracy:",
+  "Ordered and received quantities match.",
+].join("\n");
+
 describe("POST /api/reports/:id/generate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.GEMINI_API_KEY = "test-key";
     vi.mocked(tryStartGeneration).mockResolvedValue(true);
     vi.mocked(clearGenerationStatus).mockResolvedValue();
+    vi.mocked(getVendorsByIds).mockResolvedValue([{ id: 1, name: "Acme Supplies" }]);
   });
 
   it("returns 401 when the request is not authenticated", async () => {
@@ -147,7 +168,7 @@ describe("POST /api/reports/:id/generate", () => {
       if (dateFrom === "2026-01-01") return [currentTx] as any;
       return [];
     });
-    vi.mocked(geminiGenerateContent).mockResolvedValue("On-time delivery was 100.");
+    vi.mocked(geminiGenerateContent).mockResolvedValue(acceptedNarrative);
     vi.mocked(saveGeneratedReport).mockResolvedValue();
     vi.mocked(getReportById)
       .mockResolvedValueOnce(draft as any)
@@ -165,9 +186,45 @@ describe("POST /api/reports/:id/generate", () => {
     );
     const body = await response.json();
 
-    expect(saveGeneratedReport).toHaveBeenCalledOnce();
+    expect(saveGeneratedReport).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        vendor_summary: "This period covers the selected vendor.",
+        delivery_performance: "On-time delivery was 100.",
+        pricing_analysis: "Agreed and actual prices match.",
+        order_accuracy: "Ordered and received quantities match.",
+      }),
+      expect.any(Array)
+    );
     expect(response.status).toBe(200);
     expect(body.data.vendor_summary).toBe("On-time delivery was 100.");
+  });
+
+  it("sends each vendor's real name to Gemini, not just its numeric id", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
+      if (dateFrom === "2026-01-01") return [currentTx] as any;
+      return [];
+    });
+    vi.mocked(getVendorsByIds).mockResolvedValue([{ id: 1, name: "Acme Supplies" }]);
+    vi.mocked(geminiGenerateContent).mockResolvedValue(acceptedNarrative);
+    vi.mocked(saveGeneratedReport).mockResolvedValue();
+    vi.mocked(getReportById)
+      .mockResolvedValueOnce(draft as any)
+      .mockResolvedValueOnce(draft as any);
+
+    await POST(
+      new Request("http://localhost/api/reports/7/generate", {
+        method: "POST",
+        headers: { Authorization: "Bearer good.token" },
+      }),
+      { params: Promise.resolve({ id: "7" }) }
+    );
+
+    expect(getVendorsByIds).toHaveBeenCalledWith([1]);
+    const prompt = vi.mocked(geminiGenerateContent).mock.calls[0][0];
+    expect(prompt).toContain("Acme Supplies");
+    expect(prompt).not.toContain("vendor1_name\":\"Vendor 1\"");
   });
 
   it("retries on 429 and still saves once Gemini succeeds within the retry budget", async () => {
@@ -180,7 +237,47 @@ describe("POST /api/reports/:id/generate", () => {
       });
       vi.mocked(geminiGenerateContent)
         .mockRejectedValueOnce(new RateLimitError())
-        .mockResolvedValue("On-time delivery was 100.");
+        .mockResolvedValue(acceptedNarrative);
+      vi.mocked(saveGeneratedReport).mockResolvedValue();
+      vi.mocked(getReportById)
+        .mockResolvedValueOnce(draft as any)
+        .mockResolvedValueOnce({
+          ...draft,
+          vendor_summary: "On-time delivery was 100.",
+        } as any);
+
+      const responsePromise = POST(
+        new Request("http://localhost/api/reports/7/generate", {
+          method: "POST",
+          headers: { Authorization: "Bearer good.token" },
+        }),
+        { params: Promise.resolve({ id: "7" }) }
+      );
+
+      await vi.advanceTimersByTimeAsync(1000);
+      const response = await responsePromise;
+      const body = await response.json();
+
+      expect(geminiGenerateContent).toHaveBeenCalledTimes(2);
+      expect(saveGeneratedReport).toHaveBeenCalledOnce();
+      expect(response.status).toBe(200);
+      expect(body.data.vendor_summary).toBe("On-time delivery was 100.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries on 503 (Gemini overload) and still saves once Gemini succeeds within the retry budget", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
+        if (dateFrom === "2026-01-01") return [currentTx] as any;
+        return [];
+      });
+      vi.mocked(geminiGenerateContent)
+        .mockRejectedValueOnce(new ServiceUnavailableError(503))
+        .mockResolvedValue(acceptedNarrative);
       vi.mocked(saveGeneratedReport).mockResolvedValue();
       vi.mocked(getReportById)
         .mockResolvedValueOnce(draft as any)
@@ -269,7 +366,7 @@ describe("POST /api/reports/:id/generate", () => {
       if (dateFrom === "2026-01-01") return [currentTx] as any;
       return [];
     });
-    vi.mocked(geminiGenerateContent).mockResolvedValue("On-time delivery was 100.");
+    vi.mocked(geminiGenerateContent).mockResolvedValue(acceptedNarrative);
     vi.mocked(saveGeneratedReport).mockResolvedValue();
     vi.mocked(getReportById)
       .mockResolvedValueOnce(draft as any)

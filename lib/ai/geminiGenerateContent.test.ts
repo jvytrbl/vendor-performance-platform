@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { geminiGenerateContent, RateLimitError } from "./geminiGenerateContent";
+import {
+  geminiGenerateContent,
+  RateLimitError,
+  ServiceUnavailableError,
+} from "./geminiGenerateContent";
 
 describe("geminiGenerateContent", () => {
   const originalFetch = global.fetch;
@@ -18,11 +22,25 @@ describe("geminiGenerateContent", () => {
     );
   });
 
-  it("throws a plain Error (not RateLimitError) for other non-ok statuses", async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response);
+  // Gemini's most common transient failure in practice is a 503 "model
+  // currently experiencing high demand" response, not a 429 — this must be
+  // retryable too, or the retry budget never actually engages.
+  it.each([500, 502, 503, 504])(
+    "throws ServiceUnavailableError (not RateLimitError) when Gemini responds with %i",
+    async (status) => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: false, status } as Response);
 
-    await expect(geminiGenerateContent("prompt", "key")).rejects.not.toBeInstanceOf(
-      RateLimitError
-    );
+      const rejection = geminiGenerateContent("prompt", "key");
+      await expect(rejection).rejects.toBeInstanceOf(ServiceUnavailableError);
+      await expect(rejection).rejects.not.toBeInstanceOf(RateLimitError);
+    }
+  );
+
+  it("throws a plain, non-retryable Error for other non-ok statuses", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 400 } as Response);
+
+    const rejection = geminiGenerateContent("prompt", "key");
+    await expect(rejection).rejects.not.toBeInstanceOf(RateLimitError);
+    await expect(rejection).rejects.not.toBeInstanceOf(ServiceUnavailableError);
   });
 });

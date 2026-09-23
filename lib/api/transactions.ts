@@ -28,12 +28,19 @@ export interface TransactionFilters {
   vendor_id?: number;
   dateFrom?: string;
   dateTo?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface TransactionPage {
+  transactions: TransactionRecord[];
+  total: number;
 }
 
 export async function fetchTransactions(
   filters: TransactionFilters,
   accessToken: string
-): Promise<TransactionRecord[]> {
+): Promise<TransactionPage> {
   const params = new URLSearchParams();
   if (filters.vendor_id !== undefined) {
     params.set("vendor_id", String(filters.vendor_id));
@@ -44,6 +51,8 @@ export async function fetchTransactions(
   if (filters.dateTo) {
     params.set("dateTo", filters.dateTo);
   }
+  if (filters.page !== undefined) params.set("page", String(filters.page));
+  if (filters.pageSize !== undefined) params.set("pageSize", String(filters.pageSize));
 
   const query = params.toString();
   const response = await fetch(`/api/transactions${query ? `?${query}` : ""}`, {
@@ -55,7 +64,22 @@ export async function fetchTransactions(
     throw new Error(body.error ?? "Failed to fetch transactions");
   }
 
-  return body.transactions;
+  return { transactions: body.transactions, total: body.total };
+}
+
+export async function fetchAllTransactions(
+  filters: Omit<TransactionFilters, "page" | "pageSize">,
+  accessToken: string
+): Promise<TransactionRecord[]> {
+  const pageSize = 200;
+  const first = await fetchTransactions({ ...filters, page: 1, pageSize }, accessToken);
+  const transactions = [...first.transactions];
+  const pageCount = Math.ceil(first.total / pageSize);
+  for (let page = 2; page <= pageCount; page += 1) {
+    const next = await fetchTransactions({ ...filters, page, pageSize }, accessToken);
+    transactions.push(...next.transactions);
+  }
+  return transactions;
 }
 
 export type CreateTransactionResult =

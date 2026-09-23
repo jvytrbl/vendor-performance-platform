@@ -49,7 +49,10 @@ describe("insertTransaction", () => {
 describe("getTransactions — category 2: filter combinations", () => {
   it("returns all transactions with default pagination when no filters are given", async () => {
     const request = mockRequest();
-    request.query.mockResolvedValue({ recordset: [{ id: 1 }] });
+    request.query = vi
+      .fn()
+      .mockResolvedValueOnce({ recordset: [{ total: 1 }] })
+      .mockResolvedValueOnce({ recordset: [{ id: 1 }] });
     vi.mocked(getDbPool).mockResolvedValue({ request: () => request } as any);
 
     const result = await getTransactions({});
@@ -58,7 +61,7 @@ describe("getTransactions — category 2: filter combinations", () => {
     expect(sql).not.toContain("WHERE");
     expect(request.input).toHaveBeenCalledWith("offset", 0);
     expect(request.input).toHaveBeenCalledWith("limit", 50);
-    expect(result).toEqual([{ id: 1 }]);
+    expect(result).toEqual({ transactions: [{ id: 1 }], total: 1 });
   });
 
   it("filters by vendor_id only", async () => {
@@ -117,6 +120,18 @@ describe("getTransactions — category 6: pagination", () => {
 
     expect(request.input).toHaveBeenCalledWith("limit", 20);
     expect(request.input).toHaveBeenCalledWith("offset", 40);
+  });
+
+  it("keeps the total when the requested page is past the last page", async () => {
+    const request = mockRequest();
+    request.query
+      .mockResolvedValueOnce({ recordset: [{ total: 31 }] })
+      .mockResolvedValueOnce({ recordset: [] });
+    vi.mocked(getDbPool).mockResolvedValue({ request: () => request } as any);
+
+    const result = await getTransactions({ limit: 15, offset: 45 });
+
+    expect(result).toEqual({ transactions: [], total: 31 });
   });
 
   it("caps an oversized limit at 200", async () => {

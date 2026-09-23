@@ -1,13 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Check, Plus, Users } from "lucide-react";
 import type { VendorRecord } from "@/lib/api/vendors";
-import { fetchVendors } from "@/lib/api/vendors";
+import { fetchAllVendors } from "@/lib/api/vendors";
 import type { ReportInput } from "@/lib/domain/reports/validateReportInput";
 import { createReport } from "@/lib/api/reports";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
 import { resolveReportActionFailureMessage } from "@/lib/ui/reports/resolveReportActionFailureMessage";
+import { markAutoGenerate } from "@/lib/ui/reports/autoGenerateFlag";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
+import LoadingIndicator from "@/components/ui/LoadingIndicator";
 
 type Status = "loading" | "ready" | "submitting";
 
@@ -54,7 +60,7 @@ export default function AddReportForm() {
     try {
       setStatus("loading");
       const accessToken = await getAccessToken();
-      const result = await fetchVendors(accessToken);
+      const result = await fetchAllVendors(accessToken);
       setVendors(result);
       setStatus("ready");
     } catch (error) {
@@ -144,6 +150,17 @@ export default function AddReportForm() {
       const result = await createReport(input, accessToken);
 
       if (result.outcome === "created") {
+        // Deliberate deviation from SDD §5.3's original journey (Create →
+        // separately click Generate later): user testing found landing on a
+        // blank Report Editor with no explanation felt broken, not
+        // intentional. We keep the two backend actions fully separate
+        // (POST /api/reports, then POST /api/reports/:id/generate — see
+        // ReportEditor.tsx's auto-generate effect for the actual trigger)
+        // but chain them in the frontend so the user experiences one
+        // continuous action. The report row already exists in the database
+        // at this point regardless of what happens next, so the existing
+        // "always resumable from the Report List" safety property holds.
+        markAutoGenerate(result.report.id, window.sessionStorage);
         router.push(`/reports/${result.report.id}`);
       } else {
         if (result.field) {
@@ -165,33 +182,34 @@ export default function AddReportForm() {
   };
 
   if (status === "loading") {
-    return <p className="text-sm text-foreground-muted">Loading vendors…</p>;
+    return <LoadingIndicator label="Loading vendors…" />;
   }
 
   const currentYear = new Date().getFullYear();
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-8">
-      {errorMessage && (
-        <p className="text-sm text-danger">{errorMessage}</p>
-      )}
+    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-12">
+      {errorMessage && <ErrorBanner message={errorMessage} />}
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor="periodType" className="text-sm font-medium text-foreground">
-          Period Type
-        </label>
-        <select
-          id="periodType"
-          value={formData.periodType}
-          onChange={(e) =>
-            handlePeriodTypeChange(e.target.value as "Quarterly" | "Custom")
-          }
-          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
-        >
-          <option value="Quarterly">Quarterly</option>
-          <option value="Custom">Custom</option>
-        </select>
-      </div>
+      <section className="flex flex-col gap-6">
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">Period</h2>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="periodType" className="text-sm font-medium text-foreground">
+            Period Type
+          </label>
+          <select
+            id="periodType"
+            value={formData.periodType}
+            onChange={(e) =>
+              handlePeriodTypeChange(e.target.value as "Quarterly" | "Custom")
+            }
+            className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
+          >
+            <option value="Quarterly">Quarterly</option>
+            <option value="Custom">Custom</option>
+          </select>
+        </div>
 
       {formData.periodType === "Quarterly" && (
         <>
@@ -254,7 +272,7 @@ export default function AddReportForm() {
               className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
             />
             {fieldError?.field === "period_start" && (
-              <p className="text-xs text-danger">{fieldError.message}</p>
+              <ErrorBanner message={fieldError.message} />
             )}
           </div>
 
@@ -272,43 +290,65 @@ export default function AddReportForm() {
               className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
             />
             {fieldError?.field === "period_end" && (
-              <p className="text-xs text-danger">{fieldError.message}</p>
+              <ErrorBanner message={fieldError.message} />
             )}
           </div>
         </>
       )}
 
-      <div className="flex flex-col gap-3">
-        <p className="text-sm font-medium text-foreground">Vendors</p>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="flex items-center gap-1.5 text-lg font-semibold tracking-tight text-foreground">
+          <Users className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+          Vendors
+        </h2>
         <div className="flex flex-col gap-2">
-          {vendors.length === 0 ? (
-            <p className="text-sm text-foreground-muted">No vendors available.</p>
-          ) : (
+          {vendors.length === 0 && !errorMessage ? (
+            <div className="flex flex-col items-start gap-2">
+              <p className="max-w-[65ch] text-sm leading-relaxed text-foreground-muted">
+                No vendors yet. A report needs at least one vendor.
+              </p>
+              <Link href="/vendors/add" className="text-sm font-medium text-accent hover:underline">
+                Add a vendor
+              </Link>
+            </div>
+          ) : vendors.length === 0 ? null : (
             vendors.map((vendor) => (
               <label
                 key={vendor.id}
-                className="flex items-center gap-2 text-sm text-foreground"
+                className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground"
               >
-                <input
-                  type="checkbox"
-                  checked={formData.selectedVendorIds.has(vendor.id)}
-                  onChange={(e) => handleVendorToggle(vendor.id, e.target.checked)}
-                  className="h-4 w-4 rounded border-border"
-                />
+                <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.selectedVendorIds.has(vendor.id)}
+                    onChange={(e) => handleVendorToggle(vendor.id, e.target.checked)}
+                    className="peer absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded border border-border bg-surface transition-colors duration-150 ease-out checked:border-accent checked:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  />
+                  <Check
+                    className="pointer-events-none h-3 w-3 text-accent-foreground opacity-0 peer-checked:opacity-100"
+                    strokeWidth={3}
+                    aria-hidden="true"
+                  />
+                </span>
                 {vendor.name}
               </label>
             ))
           )}
         </div>
-      </div>
+      </section>
 
-      <button
+      <Button
         type="submit"
-        disabled={status === "submitting"}
-        className="rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+        variant="primary"
+        disabled={vendors.length === 0}
+        isLoading={status === "submitting"}
+        icon={<Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />}
+        className="self-start"
       >
         {status === "submitting" ? "Creating…" : "Create Report"}
-      </button>
+      </Button>
     </form>
   );
 }

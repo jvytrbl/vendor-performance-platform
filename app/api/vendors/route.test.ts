@@ -1,13 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET, POST  } from "./route";
-import { getDbPool } from "@/lib/db";
 import { validateAuthHeader } from "@/lib/auth";
-import { getAllVendors, insertVendor } from "@/lib/repositories/vendors";
+import { getAllVendors, insertVendor, listVendors } from "@/lib/repositories/vendors";
 import { error } from "console";
-
-vi.mock("@/lib/db", () => ({
-  getDbPool: vi.fn(),
-}));
 
 vi.mock("@/lib/auth", () => ({
   validateAuthHeader: vi.fn(),
@@ -16,6 +11,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/repositories/vendors", () => ({
   getAllVendors: vi.fn(),
   insertVendor: vi.fn(),
+  listVendors: vi.fn(),
 }));
 
 //GET the vendor lists
@@ -26,7 +22,7 @@ describe("GET /api/vendors", () => {
 
   it("returns a 500 response with a generic error message when the database call fails", async() => {
     vi.mocked(validateAuthHeader).mockResolvedValue( { valid: true});
-    vi.mocked(getDbPool).mockRejectedValue( new Error("Database connection failed"));
+    vi.mocked(listVendors).mockRejectedValue( new Error("Database connection failed"));
 
     const request = new Request("http://localhost/api/vendors", {
       headers: { Authorization: "Bearer good.token"},
@@ -59,6 +55,68 @@ describe("GET /api/vendors", () => {
     expect(body).toEqual({
       error: "Invalid or Expired token",
       code: "UNAUTHORIZED",
+    });
+  });
+
+  it("returns the first page of 15 vendors and the total when no page params are given", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(listVendors).mockResolvedValue({
+      vendors: [{ id: 1, name: "Acme Trading" }],
+      total: 1,
+    } as any);
+
+    const response = await GET(new Request("http://localhost/api/vendors", {
+      headers: { Authorization: "Bearer good.token" },
+    }));
+    const body = await response.json();
+
+    expect(listVendors).toHaveBeenCalledWith({ search: undefined, limit: 15, offset: 0 });
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      vendors: [{ id: 1, name: "Acme Trading" }],
+      total: 1,
+    });
+  });
+
+  it("passes search and the page slice to the repository", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(listVendors).mockResolvedValue({ vendors: [], total: 31 } as any);
+
+    await GET(new Request("http://localhost/api/vendors?page=3&pageSize=15&q=acme", {
+      headers: { Authorization: "Bearer good.token" },
+    }));
+
+    expect(listVendors).toHaveBeenCalledWith({ search: "acme", limit: 15, offset: 30 });
+  });
+
+  it("returns an empty page with the total when the requested page is past the last page", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(listVendors).mockResolvedValue({ vendors: [], total: 31 } as any);
+
+    const response = await GET(new Request("http://localhost/api/vendors?page=4&pageSize=15", {
+      headers: { Authorization: "Bearer good.token" },
+    }));
+    const body = await response.json();
+
+    expect(listVendors).toHaveBeenCalledWith({ search: undefined, limit: 15, offset: 45 });
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ vendors: [], total: 31 });
+  });
+
+  it("returns 400 when page is not a positive integer", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+
+    const response = await GET(new Request("http://localhost/api/vendors?page=0", {
+      headers: { Authorization: "Bearer good.token" },
+    }));
+    const body = await response.json();
+
+    expect(listVendors).not.toHaveBeenCalled();
+    expect(response.status).toBe(400);
+    expect(body).toEqual({
+      error: "page must be a positive integer",
+      code: "VALIDATION_FAILED",
+      field: "page",
     });
   });
   

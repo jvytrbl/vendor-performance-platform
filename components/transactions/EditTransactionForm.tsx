@@ -3,15 +3,19 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FocusEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Save } from "lucide-react";
 import {
   fetchTransactionById,
   updateTransaction,
   type TransactionInput,
 } from "@/lib/api/transactions";
-import { fetchVendors, type VendorRecord } from "@/lib/api/vendors";
+import { fetchAllVendors, type VendorRecord } from "@/lib/api/vendors";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
 import { validateTransactionInput } from "@/lib/domain/transactions/validateTransactionInput";
 import { getVisibleFieldError } from "@/lib/ui/forms/getVisibleFieldError";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
+import LoadingIndicator from "@/components/ui/LoadingIndicator";
 
 type Status = "loading" | "ready" | "error" | "not-found";
 
@@ -40,6 +44,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     async function load() {
@@ -48,7 +53,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
         const accessToken = await getAccessToken();
         const [transactionResult, vendorList] = await Promise.all([
           fetchTransactionById(id, accessToken),
-          fetchVendors(accessToken),
+          fetchAllVendors(accessToken),
         ]);
 
         setVendors(vendorList);
@@ -84,7 +89,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
       }
     }
     load();
-  }, [id, getAccessToken]);
+  }, [id, getAccessToken, reloadKey]);
 
   const validation = validateTransactionInput(input);
 
@@ -151,7 +156,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
   }
 
   if (status === "loading") {
-    return <p className="text-sm text-foreground-muted">Loading transaction…</p>;
+    return <LoadingIndicator label="Loading transaction…" />;
   }
 
   if (status === "not-found") {
@@ -159,7 +164,16 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
   }
 
   if (status === "error" && vendors.length === 0) {
-    return <p className="text-sm text-danger">{errorMessage}</p>;
+    return (
+      <ErrorBanner
+        message={errorMessage ?? "Failed to load transaction"}
+        action={
+          <Button type="button" variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>
+            Retry
+          </Button>
+        }
+      />
+    );
   }
 
   const vendorIdError = getVisibleFieldError("vendor_id", touchedFields, validation);
@@ -195,7 +209,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
             </option>
           ))}
         </select>
-        {vendorIdError && <p className="text-sm text-danger">{vendorIdError}</p>}
+        {vendorIdError && <ErrorBanner message={vendorIdError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -211,7 +225,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {transactionDateError && <p className="text-sm text-danger">{transactionDateError}</p>}
+        {transactionDateError && <ErrorBanner message={transactionDateError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -226,7 +240,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {itemDescriptionError && <p className="text-sm text-danger">{itemDescriptionError}</p>}
+        {itemDescriptionError && <ErrorBanner message={itemDescriptionError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -244,7 +258,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {agreedPriceError && <p className="text-sm text-danger">{agreedPriceError}</p>}
+        {agreedPriceError && <ErrorBanner message={agreedPriceError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -262,7 +276,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {actualPriceError && <p className="text-sm text-danger">{actualPriceError}</p>}
+        {actualPriceError && <ErrorBanner message={actualPriceError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -278,7 +292,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {agreedDeliveryDateError && <p className="text-sm text-danger">{agreedDeliveryDateError}</p>}
+        {agreedDeliveryDateError && <ErrorBanner message={agreedDeliveryDateError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -294,7 +308,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {actualDeliveryDateError && <p className="text-sm text-danger">{actualDeliveryDateError}</p>}
+        {actualDeliveryDateError && <ErrorBanner message={actualDeliveryDateError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -312,7 +326,7 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {quantityOrderedError && <p className="text-sm text-danger">{quantityOrderedError}</p>}
+        {quantityOrderedError && <ErrorBanner message={quantityOrderedError} />}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -330,18 +344,20 @@ export default function EditTransactionForm({ id }: EditTransactionFormProps) {
           onBlur={handleBlur}
           className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {quantityReceivedError && <p className="text-sm text-danger">{quantityReceivedError}</p>}
+        {quantityReceivedError && <ErrorBanner message={quantityReceivedError} />}
       </div>
 
-      {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+      {errorMessage && <ErrorBanner message={errorMessage} />}
 
-      <button
+      <Button
         type="submit"
-        disabled={isSubmitting}
-        className="self-start rounded bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-hover disabled:bg-foreground-muted/40"
+        variant="primary"
+        isLoading={isSubmitting}
+        icon={<Save className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+        className="self-start"
       >
         {isSubmitting ? "Saving…" : "Save changes"}
-      </button>
+      </Button>
     </form>
   );
 }

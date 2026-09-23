@@ -1,17 +1,24 @@
 //add vendor form (route: /vendors/add)
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import AddVendorForm from "@/components/vendors/AddVendorForm";
 
 export default function AddVendorPage() {
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-neutral-900">Add vendor</h1>
-        <Link href="/vendors" className="text-sm font-medium text-indigo-600 hover:underline">
+    <div className="flex flex-col gap-10">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="font-display text-4xl font-medium text-foreground">
+          Add vendor
+        </h1>
+        <Link
+          href="/vendors"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors duration-150 ease-out hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
           Back to vendors
         </Link>
       </div>
       <AddVendorForm />
-    </main>
+    </div>
   );
 }

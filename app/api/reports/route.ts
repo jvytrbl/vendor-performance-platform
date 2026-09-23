@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "../../../lib/withAuth";
 import { validateReportInput } from "../../../lib/domain/reports/validateReportInput";
-import { insertReport, getReports } from "@/lib/repositories/reports";
+import { insertReport, listReports } from "@/lib/repositories/reports";
 import { getVendorById } from "@/lib/repositories/vendors";
+import { parsePageParams } from "../../../lib/pagination/parsePageParams";
 
 export const POST = withAuth(async (request) => {
   const body = await request.json();
@@ -29,7 +30,14 @@ export const POST = withAuth(async (request) => {
   return NextResponse.json({ data: created }, { status: 201 });
 });
 
-export const GET =withAuth(async () => {
-    const reports = await getReports();
-    return NextResponse.json( { reports} );
+export const GET = withAuth(async (request) => {
+  const page = parsePageParams(new URL(request.url).searchParams);
+  if (!page.ok) {
+    return NextResponse.json(
+      { error: page.error, code: "VALIDATION_FAILED", field: page.field },
+      { status: 400 }
+    );
+  }
+  const result = await listReports({ limit: page.limit, offset: page.offset });
+  return NextResponse.json(result);
 });

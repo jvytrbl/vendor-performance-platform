@@ -7,9 +7,14 @@ import {
   clearGenerationStatus,
 } from "@/lib/repositories/reports";
 import { getTransactionsForPeriod } from "@/lib/repositories/transactions";
+import { getVendorsByIds } from "@/lib/repositories/vendors";
 import { getPriorPeriod } from "../../../../../lib/domain/reports/getPriorPeriod";
 import { runReportGeneration } from "../../../../../lib/domain/reports/runReportGeneration";
-import { geminiGenerateContent, RateLimitError } from "../../../../../lib/ai/geminiGenerateContent";
+import {
+  geminiGenerateContent,
+  RateLimitError,
+  ServiceUnavailableError,
+} from "../../../../../lib/ai/geminiGenerateContent";
 import { withRetry } from "../../../../../lib/ai/withRetry";
 
 function wait(ms: number): Promise<void> {
@@ -18,7 +23,8 @@ function wait(ms: number): Promise<void> {
 
 async function generateContentWithRetry(prompt: string, apiKey: string): Promise<string> {
   const result = await withRetry(() => geminiGenerateContent(prompt, apiKey), {
-    isRetryable: (error) => error instanceof RateLimitError,
+    isRetryable: (error) =>
+      error instanceof RateLimitError || error instanceof ServiceUnavailableError,
     wait,
   });
   if (!result.ok) {
@@ -113,9 +119,12 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
         priorPeriod.periodStart,
         priorPeriod.periodEnd
       );
+      const vendors = await getVendorsByIds(existing.vendor_ids);
+      const vendorNames = new Map(vendors.map((vendor) => [vendor.id, vendor.name]));
 
       const result = await runReportGeneration({
         vendorIds: existing.vendor_ids,
+        vendorNames,
         currentPeriod,
         priorPeriod,
         currentTxs,

@@ -1,38 +1,54 @@
 @import "tailwindcss";
 
 :root {
-  /* 70% tier — the neutral canvas the whole shell sits on */
-  --color-canvas: oklch(97.5% 0.006 240);
+  /* Neutral base. Chroma is exactly 0: pure grayscale, hue unused.
+     Canvas is the page. Surface matches that near-white for panels.
+     Surface-muted is the sidebar and navbar. Border is the divider. */
+  --color-canvas: oklch(98% 0 0);
+  --color-surface: oklch(98% 0 0);
+  --color-surface-muted: oklch(95% 0 0);
+  --color-border: oklch(88% 0 0);
+  --color-foreground: oklch(24% 0.02 50);
+  --color-foreground-muted: oklch(45% 0.016 50);
+  --color-foreground-subtle: oklch(56% 0.012 50);
 
-  /* A slightly lighter, less-tinted surface for content panels (table, etc.) —
-     distinct enough from --color-canvas to read as its own plane */
-  --color-surface: oklch(99% 0.004 240);
-
-  /* 30% tier — structural surfaces: sidebar, table headers, borders */
-  --color-surface-muted: oklch(93% 0.01 240);
-  --color-border: oklch(87% 0.012 240);
-
-  /* Text neutrals — three tiers so labels, secondary data, and primary
-     data can all read at clearly different weights of importance */
-  --color-foreground: oklch(23% 0.015 240);
-  --color-foreground-muted: oklch(48% 0.014 240);
-  --color-foreground-subtle: oklch(60% 0.012 240);
-
-  /* 10% tier — the one accent, used sparingly: primary actions, active nav, links.
-     accent-soft is deliberately a firm light green (same hue/chroma family as the
-     button), not a washed-out pastel, so the active nav state reads as the same
-     accent, not a different weaker color. */
+  /* Primary accent. The one loud hue. Green, hue 152, chroma 0.13.
+     Job: primary buttons, the sign-in control, active navigation, link hover,
+     and "good" metric severity. Success aliases this same green so a positive
+     result and a primary action share one hue. */
   --color-accent: oklch(48% 0.13 152);
   --color-accent-hover: oklch(42% 0.135 152);
   --color-accent-foreground: oklch(98% 0.015 152);
-  --color-accent-soft: oklch(90% 0.075 152);
+  --color-accent-soft: oklch(92% 0.05 152);
 
-  /* Destructive action gets its own deliberate hue family, distinct from the
-     accent's meaning. danger-muted is the resting state (clear, not alarming);
-     danger is the full-strength color used only on hover/at the actual commit step. */
-  --color-danger: oklch(48% 0.14 25);
-  --color-danger-muted: oklch(58% 0.07 25);
-  --color-danger-soft: oklch(94% 0.03 25);
+  /* Secondary accent. Muted teal, hue 188, next to green on the wheel.
+     Chroma is about half of the primary green, so this recedes.
+     Job: informational only. Finalized status, helper notes.
+     Not buttons, not navigation, not errors. */
+  --color-info: oklch(40% 0.055 188);
+  --color-info-soft: oklch(95% 0.02 188);
+
+  /* Success. Same green as the primary accent. Not a second green.
+     Job: metric cells in the good band. */
+  --color-success: var(--color-accent);
+  --color-success-hover: var(--color-accent-hover);
+  --color-success-foreground: var(--color-accent-foreground);
+  --color-success-soft: var(--color-accent-soft);
+
+  /* Warning. Amber, chroma below the primary green.
+     Job: elevated-but-not-broken states only (metric warning band, duplicate confirmation).
+     Never decorative. */
+  --color-warning: oklch(48% 0.09 75);
+  --color-warning-hover: oklch(42% 0.095 75);
+  --color-warning-muted: oklch(52% 0.065 75);
+  --color-warning-soft: oklch(95.5% 0.028 75);
+
+  /* Danger. Red, chroma below the primary green.
+     Job: validation errors, failed rows, delete, and other destructive actions.
+     Never navigation. Never decoration. */
+  --color-danger: oklch(46% 0.1 27);
+  --color-danger-muted: oklch(50% 0.065 27);
+  --color-danger-soft: oklch(95.5% 0.02 27);
 }
 
 @theme inline {
@@ -50,14 +66,36 @@
   --color-danger: var(--color-danger);
   --color-danger-muted: var(--color-danger-muted);
   --color-danger-soft: var(--color-danger-soft);
+  --color-success: var(--color-success);
+  --color-success-hover: var(--color-success-hover);
+  --color-success-foreground: var(--color-success-foreground);
+  --color-success-soft: var(--color-success-soft);
+  --color-warning: var(--color-warning);
+  --color-warning-hover: var(--color-warning-hover);
+  --color-warning-muted: var(--color-warning-muted);
+  --color-warning-soft: var(--color-warning-soft);
+  --color-info: var(--color-info);
+  --color-info-soft: var(--color-info-soft);
   --font-sans: var(--font-sans-custom);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display-custom);
 }
 
 body {
   background: var(--color-canvas);
   color: var(--color-foreground);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+  }
 }
 
 select {
@@ -66,4 +104,54 @@ select {
   background-position: right 0.75rem center;
   background-repeat: no-repeat;
   background-size: 1rem;
+}
+
+/* Indeterminate progress bar (AI generation, file upload processing).
+   Only ever animates transform, never a layout property. */
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.animate-progress-indeterminate {
+  animation: progress-indeterminate 1.4s ease-out infinite;
+}
+
+/* Report generation only. The fill travels back and forth so the bar
+   does not read as a known percentage. */
+@keyframes progress-pendulum {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+.animate-progress-pendulum {
+  animation: progress-pendulum 1.8s ease-in-out infinite alternate;
+}
+
+.generate-phrase {
+  transition: opacity 400ms ease-in-out;
+}
+
+/* Real prefers-reduced-motion check: users who ask for reduced motion get a
+   static, non-animated fill instead of the sliding bar. This is a genuine
+   media query, not a Tailwind class-only stand-in. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-progress-indeterminate,
+  .animate-progress-pendulum {
+    animation: none;
+    transform: translateX(0);
+    width: 40% !important;
+  }
+
+  .generate-phrase {
+    transition: none;
+  }
 }

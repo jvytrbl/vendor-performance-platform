@@ -91,15 +91,29 @@ export async function insertReport(input: ReportInput): Promise<ReportRecord> {
   return { ...created, vendor_ids: input.vendor_ids };
 }
 
-export async function getReports(): Promise<ReportListItem[]> {
+export async function listReports(page: {
+  limit: number;
+  offset: number;
+}): Promise<{ reports: ReportListItem[]; total: number }> {
   const pool = await getDbPool();
-  const result = await pool.request().query(
+  const request = pool.request();
+  request.input("offset", page.offset);
+  request.input("limit", page.limit);
+
+  const countResult = await request.query(
+    `SELECT COUNT(*) AS total FROM VENDOR_PERFORMANCE_REPORTS`
+  );
+  const rowsResult = await request.query(
     `SELECT id, reference_number, period_type, period_start, period_end, status, created_at
-       FROM VENDOR_PERFORMANCE_REPORTS
-       ORDER BY created_at DESC`
+     FROM VENDOR_PERFORMANCE_REPORTS
+     ORDER BY created_at DESC
+     OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
   );
 
-  return result.recordset;
+  return {
+    reports: rowsResult.recordset,
+    total: Number(countResult.recordset[0]?.total ?? 0),
+  };
 }
 
 export async function getReportById(id: number): Promise<ReportDetailRecord | null> {
@@ -124,16 +138,23 @@ export async function getReportById(id: number): Promise<ReportDetailRecord | nu
     .query(
       `SELECT vendor_id FROM VENDOR_PERFORMANCE_REPORT_VENDORS WHERE report_id = @id`
     );
+  // A report's generation run stores one row per vendor for the current
+  // period AND one for the prior-period comparison (both share this
+  // report_id — see UQ_VPM_report_vendor_period, keyed on report_id +
+  // vendor_id + period_start, not just report_id + vendor_id). This view
+  // shows one row per vendor, so it must also pin period_start to the
+  // report's own period, or every vendor's prior-period row comes back too.
   const metricsResult = await pool
     .request()
     .input("id", id)
+    .input("period_start", report.period_start)
     .query(
       `SELECT vendor_id, period_start, period_end,
               on_time_delivery_rate, avg_delay_days, overcharge_rate, avg_overcharge_pct,
               undercharge_rate, shortfall_rate, avg_shortfall_units, overdelivery_rate,
               avg_overdelivery_units, transaction_count
        FROM VENDOR_PERFORMANCE_METRICS
-       WHERE report_id = @id`
+       WHERE report_id = @id AND period_start = @period_start`
     );
   return {
     ...report,
@@ -147,7 +168,11 @@ export async function updateReportSections(
   input: ReportSectionInput
 ): Promise<Omit<ReportDetailRecord, "vendor_ids" | "metrics"> | null> {
   const pool = await getDbPool();
-  const result = await pool
+  // No OUTPUT clause here: VENDOR_PERFORMANCE_REPORTS has the
+  // TR_VPR_finalized_immutable AFTER UPDATE/DELETE trigger (migration 002),
+  // and SQL Server forbids OUTPUT-without-INTO on a table with any enabled
+  // trigger (error 334). Fetch the updated row with a follow-up SELECT instead.
+  await pool
     .request()
     .input("id", id)
     .input("vendor_summary", input.vendor_summary)
@@ -160,11 +185,17 @@ export async function updateReportSections(
            delivery_performance = @delivery_performance,
            pricing_analysis = @pricing_analysis,
            order_accuracy = @order_accuracy
-       OUTPUT INSERTED.id, INSERTED.reference_number, INSERTED.period_type,
-              INSERTED.period_start, INSERTED.period_end, INSERTED.status,
-              INSERTED.vendor_summary, INSERTED.delivery_performance,
-              INSERTED.pricing_analysis, INSERTED.order_accuracy,
-              INSERTED.created_at, INSERTED.finalized_at
+       WHERE id = @id`
+    );
+
+  const result = await pool
+    .request()
+    .input("id", id)
+    .query(
+      `SELECT id, reference_number, period_type, period_start, period_end, status,
+              vendor_summary, delivery_performance, pricing_analysis, order_accuracy,
+              created_at, finalized_at
+       FROM VENDOR_PERFORMANCE_REPORTS
        WHERE id = @id`
     );
   return result.recordset[0] ?? null;
@@ -184,18 +215,27 @@ export async function finalizeReport(
   id: number
 ): Promise<Omit<ReportDetailRecord, "vendor_ids" | "metrics"> | null> {
   const pool = await getDbPool();
-  const result = await pool
+  // Same OUTPUT-without-INTO restriction as updateReportSections above
+  // (SQL error 334, caused by TR_VPR_finalized_immutable) — plain UPDATE
+  // followed by a SELECT instead.
+  await pool
     .request()
     .input("id", id)
     .input("status", "Finalized")
     .query(
       `UPDATE VENDOR_PERFORMANCE_REPORTS
        SET status = @status, finalized_at = GETUTCDATE()
-       OUTPUT INSERTED.id, INSERTED.reference_number, INSERTED.period_type,
-              INSERTED.period_start, INSERTED.period_end, INSERTED.status,
-              INSERTED.vendor_summary, INSERTED.delivery_performance,
-              INSERTED.pricing_analysis, INSERTED.order_accuracy,
-              INSERTED.created_at, INSERTED.finalized_at
+       WHERE id = @id`
+    );
+
+  const result = await pool
+    .request()
+    .input("id", id)
+    .query(
+      `SELECT id, reference_number, period_type, period_start, period_end, status,
+              vendor_summary, delivery_performance, pricing_analysis, order_accuracy,
+              created_at, finalized_at
+       FROM VENDOR_PERFORMANCE_REPORTS
        WHERE id = @id`
     );
 

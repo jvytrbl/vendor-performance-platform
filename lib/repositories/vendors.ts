@@ -38,6 +38,25 @@ export async function insertVendor(input: VendorInput): Promise<VendorRecord> {
         return result.recordset[0];
 }
 
+export async function getVendorsByIds(ids: number[]): Promise<VendorRecord[]> {
+    if (ids.length === 0) {
+        return [];
+    }
+
+    const pool = await getDbPool();
+    const request = pool.request();
+    const vendorParams = ids.map((id, index) => {
+        request.input(`vendor${index}`, id);
+        return `@vendor${index}`;
+    });
+
+    const result = await request.query(
+        `SELECT id, name FROM VENDORS WHERE id IN (${vendorParams.join(", ")})`
+    );
+
+    return result.recordset;
+}
+
 export async function getVendorById(id: number): Promise<VendorDetailRecord | null> {
     const pool = await getDbPool();
     const result = await pool
@@ -48,6 +67,46 @@ export async function getVendorById(id: number): Promise<VendorDetailRecord | nu
         );
 
     return result.recordset[0] ?? null;
+}
+
+function likePattern(term: string): string {
+  const escaped = term.replace(/[%_\[\]]/g, (char) => `[${char}]`);
+  return `%${escaped}%`;
+}
+
+export async function listVendors(page: {
+  search?: string;
+  limit: number;
+  offset: number;
+}): Promise<{ vendors: VendorDetailRecord[]; total: number }> {
+  const pool = await getDbPool();
+  const request = pool.request();
+  request.input("offset", page.offset);
+  request.input("limit", page.limit);
+
+  const search = page.search?.trim();
+  const whereClause = search
+    ? `WHERE (name LIKE @search OR registration_number LIKE @search OR contact_info LIKE @search)`
+    : "";
+  if (search) {
+    request.input("search", likePattern(search));
+  }
+
+  const countResult = await request.query(
+    `SELECT COUNT(*) AS total FROM VENDORS ${whereClause}`
+  );
+  const rowsResult = await request.query(
+    `SELECT id, name, registration_number, contact_info, created_at
+     FROM VENDORS
+     ${whereClause}
+     ORDER BY created_at DESC
+     OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
+  );
+
+  return {
+    vendors: rowsResult.recordset,
+    total: Number(countResult.recordset[0]?.total ?? 0),
+  };
 }
 
 export async function deleteVendor(id: number): Promise<number> {

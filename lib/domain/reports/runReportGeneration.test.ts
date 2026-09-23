@@ -15,24 +15,39 @@ const currentTx = {
 
 const input = {
   vendorIds: [1],
+  vendorNames: new Map([[1, "Acme Supplies"]]),
   currentPeriod: { periodStart: "2026-01-01", periodEnd: "2026-03-31" },
   priorPeriod: { periodStart: "2025-10-01", periodEnd: "2025-12-31" },
   currentTxs: [currentTx],
   priorTxs: [],
 };
 
+const acceptedNarrative = [
+  "Vendor Summary:",
+  "This period covers the selected vendor.",
+  "",
+  "Delivery Performance:",
+  "On-time delivery was 100.",
+  "",
+  "Pricing Analysis:",
+  "Agreed and actual prices match.",
+  "",
+  "Order Accuracy:",
+  "Ordered and received quantities match.",
+].join("\n");
+
 describe("runReportGeneration", () => {
   it("returns sections and metrics when the narrative only uses computed numbers", async () => {
-    const generateContent = vi.fn().mockResolvedValue("On-time delivery was 100.");
+    const generateContent = vi.fn().mockResolvedValue(acceptedNarrative);
 
     const result = await runReportGeneration({ ...input, generateContent });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.sections.vendor_summary).toBe("On-time delivery was 100.");
+    expect(result.sections.vendor_summary).toBe("This period covers the selected vendor.");
     expect(result.sections.delivery_performance).toBe("On-time delivery was 100.");
-    expect(result.sections.pricing_analysis).toBe("On-time delivery was 100.");
-    expect(result.sections.order_accuracy).toBe("On-time delivery was 100.");
+    expect(result.sections.pricing_analysis).toBe("Agreed and actual prices match.");
+    expect(result.sections.order_accuracy).toBe("Ordered and received quantities match.");
     expect(result.metrics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -43,6 +58,69 @@ describe("runReportGeneration", () => {
         }),
       ])
     );
+  });
+
+  it("includes each vendor's real name in the data sent to the model, not just its numeric id", async () => {
+    const generateContent = vi.fn().mockResolvedValue(acceptedNarrative);
+
+    await runReportGeneration({ ...input, generateContent });
+
+    const prompt = generateContent.mock.calls[0][0];
+    expect(prompt).toContain("vendor1_name");
+    expect(prompt).toContain("Acme Supplies");
+  });
+
+  it("falls back to a Vendor {id} placeholder if a vendor name is missing from the lookup", async () => {
+    const generateContent = vi.fn().mockResolvedValue(acceptedNarrative);
+
+    await runReportGeneration({
+      ...input,
+      vendorNames: new Map(),
+      generateContent,
+    });
+
+    const prompt = generateContent.mock.calls[0][0];
+    expect(prompt).toContain('"vendor1_name":"Vendor 1"');
+  });
+
+  it("retries then fails when the same paragraph is copied into every section", async () => {
+    const repeated = [
+      "Vendor Summary:",
+      "On-time delivery was 100.",
+      "Delivery Performance:",
+      "On-time delivery was 100.",
+      "Pricing Analysis:",
+      "On-time delivery was 100.",
+      "Order Accuracy:",
+      "On-time delivery was 100.",
+    ].join("\n");
+    const generateContent = vi.fn().mockResolvedValue(repeated);
+
+    const result = await runReportGeneration({ ...input, generateContent });
+
+    expect(generateContent).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({
+      ok: false,
+      error: "Generated narrative failed validation; nothing was saved",
+      code: "NARRATIVE_VALIDATION_FAILED",
+    });
+  });
+
+  it("retries then fails when one section invents a number", async () => {
+    const invented = acceptedNarrative.replace(
+      "Agreed and actual prices match.",
+      "The overcharge was 9."
+    );
+    const generateContent = vi.fn().mockResolvedValue(invented);
+
+    const result = await runReportGeneration({ ...input, generateContent });
+
+    expect(generateContent).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({
+      ok: false,
+      error: "Generated narrative failed validation; nothing was saved",
+      code: "NARRATIVE_VALIDATION_FAILED",
+    });
   });
 
   it("retries then fails without returning sections when the narrative invents a number", async () => {

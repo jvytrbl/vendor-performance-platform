@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import {
   fetchTransactionById,
   deleteTransaction,
@@ -11,6 +12,9 @@ import {
 import { fetchVendorById } from "@/lib/api/vendors";
 import { formatTransactionDetail } from "@/lib/ui/transactions/formatTransactionDetail";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
+import LoadingIndicator from "@/components/ui/LoadingIndicator";
 import DeleteTransactionButton from "./DeleteTransactionButton";
 
 type Status = "loading" | "ready" | "error" | "not-found";
@@ -26,6 +30,7 @@ export default function TransactionDetail({ id }: TransactionDetailProps) {
   const [vendorName, setVendorName] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -72,7 +77,7 @@ export default function TransactionDetail({ id }: TransactionDetailProps) {
     return () => {
       isMounted = false;
     };
-  }, [id, getAccessToken]);
+  }, [id, getAccessToken, reloadKey]);
 
   async function handleDelete() {
     setIsDeleting(true);
@@ -97,7 +102,7 @@ export default function TransactionDetail({ id }: TransactionDetailProps) {
   }
 
   if (status === "loading") {
-    return <p className="text-sm text-foreground-muted">Loading transaction…</p>;
+    return <LoadingIndicator label="Loading transaction…" />;
   }
 
   if (status === "not-found") {
@@ -105,7 +110,16 @@ export default function TransactionDetail({ id }: TransactionDetailProps) {
   }
 
   if (status === "error" && !transaction) {
-    return <p className="text-sm text-danger">{errorMessage}</p>;
+    return (
+      <ErrorBanner
+        message={errorMessage ?? "Failed to load transaction"}
+        action={
+          <Button type="button" variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>
+            Retry
+          </Button>
+        }
+      />
+    );
   }
 
   if (!transaction) {
@@ -117,25 +131,29 @@ export default function TransactionDetail({ id }: TransactionDetailProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">
+        <h2 className="font-display text-2xl font-medium text-foreground">
           Transaction #{row.id}
-        </h1>
+        </h2>
         <span className="flex items-center gap-4">
           <Link
             href={`/transactions/${row.id}/edit`}
-            className="text-sm font-medium text-accent hover:underline"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors duration-150 ease-out hover:underline"
           >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
             Edit
           </Link>
           <DeleteTransactionButton onConfirmDelete={handleDelete} isDeleting={isDeleting} />
         </span>
       </div>
 
-      {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
+      {errorMessage && <ErrorBanner message={errorMessage} />}
 
       <section>
         <h2 className="mb-2 text-sm font-medium text-foreground-muted">Vendor</h2>
-        <Link href={`/vendors/${row.vendorId}`} className="text-sm text-accent hover:underline">
+        <Link
+          href={`/vendors/${row.vendorId}`}
+          className="text-sm text-accent transition-colors duration-150 ease-out hover:underline"
+        >
           {vendorName ?? `#${row.vendorId}`}
         </Link>
       </section>
@@ -145,7 +163,7 @@ export default function TransactionDetail({ id }: TransactionDetailProps) {
         <p className="text-sm text-foreground">{row.itemDescription}</p>
       </section>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <section>
           <h2 className="mb-2 text-sm font-medium text-foreground-muted">Agreed</h2>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">

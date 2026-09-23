@@ -3,11 +3,14 @@
 import { useState } from "react";
 import type { ChangeEvent, FocusEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import { createVendor, type VendorInput } from "@/lib/api/vendors";
 import { validateVendorInput } from "@/lib/domain/vendors/validateVendorInput";
 import { getVisibleFieldError } from "@/lib/ui/forms/getVisibleFieldError";
 import type { DuplicateVendorMatch } from "@/lib/ui/vendors/buildDuplicateConfirmMessage";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
 import DuplicateConfirmation from "./DuplicateConfirmation";
 
 const initialInput: VendorInput = {
@@ -85,7 +88,7 @@ export default function AddVendorForm() {
   return (
     <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <label htmlFor="name" className="text-sm font-medium text-neutral-700">
+        <label htmlFor="name" className="text-sm font-medium text-foreground-muted">
           Vendor name
         </label>
         <input
@@ -94,13 +97,13 @@ export default function AddVendorForm() {
           value={input.name}
           onChange={handleChange}
           onBlur={handleBlur}
-          className="rounded border border-neutral-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none"
+          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {nameError && <p className="text-sm text-red-700">{nameError}</p>}
+        {nameError && <ErrorBanner message={nameError} />}
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="registration_number" className="text-sm font-medium text-neutral-700">
+        <label htmlFor="registration_number" className="text-sm font-medium text-foreground-muted">
           Registration number
         </label>
         <input
@@ -109,13 +112,13 @@ export default function AddVendorForm() {
           value={input.registration_number}
           onChange={handleChange}
           onBlur={handleBlur}
-          className="rounded border border-neutral-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none"
+          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {registrationNumberError && <p className="text-sm text-red-700">{registrationNumberError}</p>}
+        {registrationNumberError && <ErrorBanner message={registrationNumberError} />}
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="contact_info" className="text-sm font-medium text-neutral-700">
+        <label htmlFor="contact_info" className="text-sm font-medium text-foreground-muted">
           Contact info
         </label>
         <input
@@ -124,9 +127,9 @@ export default function AddVendorForm() {
           value={input.contact_info}
           onChange={handleChange}
           onBlur={handleBlur}
-          className="rounded border border-neutral-300 px-3 py-2 text-sm focus:border-indigo-600 focus:outline-none"
+          className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        {contactInfoError && <p className="text-sm text-red-700">{contactInfoError}</p>}
+        {contactInfoError && <ErrorBanner message={contactInfoError} />}
       </div>
 
       {pendingDuplicate && (
@@ -139,15 +142,17 @@ export default function AddVendorForm() {
         />
       )}
 
-      {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
+      {errorMessage && <ErrorBanner message={errorMessage} />}
 
-      <button
+      <Button
         type="submit"
-        disabled={isSubmitting}
-        className="self-start rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:bg-neutral-300"
+        variant="primary"
+        isLoading={isSubmitting}
+        icon={<Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />}
+        className="self-start"
       >
         {isSubmitting ? "Adding…" : "Add vendor"}
-      </button>
+      </Button>
     </form>
   );
 }

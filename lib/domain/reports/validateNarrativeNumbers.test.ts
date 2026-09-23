@@ -78,4 +78,46 @@ describe("validateNarrativeNumbers", () => {
     );
     expect(result).toEqual({ valid: true });
   });
+
+  it("accepts the nearest-whole-number rounding of a decimal source value", () => {
+    const result = validateNarrativeNumbers(
+      "On-time delivery was about 86% this period.",
+      { onTimeDeliveryRate: 85.71 }
+    );
+    expect(result).toEqual({ valid: true });
+  });
+
+  it("still rejects a number that matches neither the exact value nor its nearest-whole-number rounding", () => {
+    const result = validateNarrativeNumbers(
+      "On-time delivery was about 90% this period.",
+      { onTimeDeliveryRate: 85.71 }
+    );
+    expect(result).toEqual({ valid: false, unmatchedValues: [90] });
+  });
+
+  it("rounds .5 up when checking the nearest-whole-number allowance", () => {
+    const result = validateNarrativeNumbers("The average delay was 2 days.", {
+      avgDelayDays: 1.5,
+    });
+    expect(result).toEqual({ valid: true });
+  });
+
+  it("does not treat a vendor id in a 'Vendor N' reference as an invented number", () => {
+    const result = validateNarrativeNumbers(
+      "Performance metrics for Vendor 2 are entirely unavailable this period.",
+      {}
+    );
+    expect(result).toEqual({ valid: true });
+  });
+
+  it("still flags a genuinely unmatched number that happens to follow the word 'Vendor' without being an id reference", () => {
+    // Guardrail: confirms the "Vendor N" exclusion is narrow (only the id
+    // immediately after "Vendor") and doesn't accidentally whitelist an
+    // unrelated number elsewhere in the same sentence.
+    const result = validateNarrativeNumbers(
+      "Vendor 2 recorded a 42 percent overcharge rate.",
+      {}
+    );
+    expect(result).toEqual({ valid: false, unmatchedValues: [42] });
+  });
 });

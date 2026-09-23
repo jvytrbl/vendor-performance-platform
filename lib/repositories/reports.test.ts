@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { insertReport, getReports, getReportById, updateReportSections, deleteReport, finalizeReport, saveGeneratedReport, tryStartGeneration, clearGenerationStatus } from "./reports";
+import { insertReport, listReports, getReportById, updateReportSections, deleteReport, finalizeReport, saveGeneratedReport, tryStartGeneration, clearGenerationStatus } from "./reports";
 import { getDbPool } from "@/lib/db";
 
 vi.mock("@/lib/db", () => ({
@@ -83,42 +83,22 @@ describe("insertReport", () => {
   });
 });
 
-describe("getReports", () => {
-  it("returns Draft and Finalized reports newest first", async () => {
-    const rows = [
-      {
-        id: 2,
-        reference_number: "VPR-20260401-222222",
-        period_type: "Custom",
-        period_start: "2026-04-01",
-        period_end: "2026-04-30",
-        status: "Draft",
-        created_at: "2026-05-01T00:00:00.000Z",
-      },
-      {
-        id: 1,
-        reference_number: "VPR-20260101-111111",
-        period_type: "Quarterly",
-        period_start: "2026-01-01",
-        period_end: "2026-03-31",
-        status: "Finalized",
-        created_at: "2026-04-01T00:00:00.000Z",
-      },
-    ];
+describe("listReports", () => {
+  it("returns one page and the total, including an empty page past the end", async () => {
+    const request: any = {};
+    request.input = vi.fn().mockReturnValue(request);
+    request.query = vi
+      .fn()
+      .mockResolvedValueOnce({ recordset: [{ total: 31 }] })
+      .mockResolvedValueOnce({ recordset: [] });
+    vi.mocked(getDbPool).mockResolvedValue({ request: () => request } as any);
 
-    const mockQuery = vi.fn().mockResolvedValue({ recordset: rows });
-    vi.mocked(getDbPool).mockResolvedValue({
-      request: () => ({ query: mockQuery }),
-    } as any);
+    const result = await listReports({ limit: 15, offset: 45 });
 
-    const result = await getReports();
-
-    expect(mockQuery).toHaveBeenCalledWith(
-      `SELECT id, reference_number, period_type, period_start, period_end, status, created_at
-       FROM VENDOR_PERFORMANCE_REPORTS
-       ORDER BY created_at DESC`
-    );
-    expect(result).toEqual(rows);
+    expect(request.input).toHaveBeenCalledWith("offset", 45);
+    expect(request.input).toHaveBeenCalledWith("limit", 15);
+    expect(request.query.mock.calls[1][0]).toContain("OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY");
+    expect(result).toEqual({ reports: [], total: 31 });
   });
 });
 
@@ -156,6 +136,37 @@ describe("getReportById", () => {
       vendor_ids: [1, 2],
       metrics: [metricRow],
     });
+  });
+
+  // Regression: generation stores one row per vendor for the current period
+  // AND one for the prior-period comparison, both under the same report_id
+  // (UQ_VPM_report_vendor_period is keyed on report_id + vendor_id +
+  // period_start, not just report_id + vendor_id). Filtering by report_id
+  // alone returns both rows per vendor — the metrics query must also pin
+  // period_start to the report's own period.
+  it("filters the metrics query to the report's own period_start, not just its report_id", async () => {
+    const mockRequest: any = {};
+    mockRequest.input = vi.fn().mockReturnValue(mockRequest);
+    let metricsQuerySql = "";
+    mockRequest.query = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes("VENDOR_PERFORMANCE_METRICS")) {
+        metricsQuerySql = sql;
+        return { recordset: [metricRow] };
+      }
+      if (sql.includes("VENDOR_PERFORMANCE_REPORT_VENDORS")) {
+        return { recordset: [{ vendor_id: 1 }] };
+      }
+      return { recordset: [reportRow] };
+    });
+    vi.mocked(getDbPool).mockResolvedValue({
+      request: () => mockRequest,
+    } as any);
+
+    await getReportById(7);
+
+    expect(mockRequest.input).toHaveBeenCalledWith("period_start", reportRow.period_start);
+    expect(metricsQuerySql).toContain("report_id = @id");
+    expect(metricsQuerySql).toContain("period_start = @period_start");
   });
 });
 

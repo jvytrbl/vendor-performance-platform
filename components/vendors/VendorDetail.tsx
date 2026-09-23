@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Inbox } from "lucide-react";
 import type { VendorRecord } from "@/lib/api/vendors";
 import { fetchVendorById, deleteVendor } from "@/lib/api/vendors";
-import { fetchTransactions, type TransactionRecord } from "@/lib/api/transactions";
+import { fetchAllTransactions, type TransactionRecord } from "@/lib/api/transactions";
 import { formatVendorForTable } from "@/lib/ui/vendors/formatVendorForTable";
 import { formatTransactionForTable } from "@/lib/ui/transactions/formatTransactionForTable";
 import { resolveDeleteFailureMessage } from "@/lib/ui/vendors/resolveDeleteFailureMessage";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
+import Button from "@/components/ui/Button";
+import ErrorBanner from "@/components/ui/ErrorBanner";
+import LoadingIndicator from "@/components/ui/LoadingIndicator";
 import DeleteVendorButton from "./DeleteVendorButton";
 
 type Status = "loading" | "ready" | "error" | "not-found";
@@ -25,6 +29,7 @@ export default function VendorDetail({ id }: VendorDetailProps) {
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -50,7 +55,7 @@ export default function VendorDetail({ id }: VendorDetailProps) {
 
         setVendor(result.vendor);
 
-        const vendorTransactions = await fetchTransactions({ vendor_id: id }, accessToken);
+        const vendorTransactions = await fetchAllTransactions({ vendor_id: id }, accessToken);
         if (!isMounted) return;
         setTransactions(vendorTransactions);
 
@@ -68,7 +73,7 @@ export default function VendorDetail({ id }: VendorDetailProps) {
     return () => {
       isMounted = false;
     };
-  }, [id, getAccessToken]);
+  }, [id, getAccessToken, reloadKey]);
 
   async function handleDelete() {
     setIsDeleting(true);
@@ -93,15 +98,24 @@ export default function VendorDetail({ id }: VendorDetailProps) {
   }
 
   if (status === "loading") {
-    return <p className="text-sm text-neutral-500">Loading vendor…</p>;
+    return <LoadingIndicator label="Loading vendor…" />;
   }
 
   if (status === "not-found") {
-    return <p className="text-sm text-neutral-700">Vendor not found.</p>;
+    return <p className="text-sm text-foreground-muted">Vendor not found.</p>;
   }
 
   if (status === "error") {
-    return <p className="text-sm text-red-700">{errorMessage}</p>;
+    return (
+      <ErrorBanner
+        message={errorMessage ?? "Failed to load vendor"}
+        action={
+          <Button type="button" variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>
+            Retry
+          </Button>
+        }
+      />
+    );
   }
 
   if (!vendor) {
@@ -112,69 +126,79 @@ export default function VendorDetail({ id }: VendorDetailProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-neutral-900">{row.name}</h1>
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="font-display text-2xl font-medium text-foreground">{row.name}</h2>
         <DeleteVendorButton onConfirmDelete={handleDelete} isDeleting={isDeleting} />
       </div>
 
-      {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
+      {errorMessage && <ErrorBanner message={errorMessage} />}
 
       <dl className="grid max-w-md grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-        <dt className="text-neutral-500">Registration No.</dt>
-        <dd className="text-neutral-900">{row.registrationNumber}</dd>
+        <dt className="text-foreground-muted">Registration No.</dt>
+        <dd className="tabular-nums text-foreground">{row.registrationNumber}</dd>
 
-        <dt className="text-neutral-500">Contact</dt>
-        <dd className="text-neutral-900">{row.contactInfo}</dd>
+        <dt className="text-foreground-muted">Contact</dt>
+        <dd className="min-w-0 break-words text-foreground">{row.contactInfo}</dd>
 
-        <dt className="text-neutral-500">Added</dt>
-        <dd className="text-neutral-900">{row.createdAt}</dd>
+        <dt className="text-foreground-muted">Added</dt>
+        <dd className="tabular-nums text-foreground">{row.createdAt}</dd>
       </dl>
 
-      <section>
-        <h2 className="mb-2 text-sm font-medium text-neutral-700">
+      <section className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium text-foreground-muted">
           Transaction history
-        </h2>
+        </h3>
         {transactions.length === 0 ? (
-          <p className="text-sm text-neutral-500">No transactions yet.</p>
+          <div className="flex flex-col items-center gap-3 rounded border border-border bg-surface py-16 text-center">
+            <Inbox className="h-8 w-8 text-foreground-subtle" strokeWidth={1.5} aria-hidden="true" />
+            <p className="text-base text-foreground-muted">No transactions yet.</p>
+          </div>
         ) : (
-          <table className="w-full max-w-2xl border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left">
-                <th className="py-2 pr-4 text-xs font-normal uppercase tracking-wide text-neutral-400">
-                  Date
-                </th>
-                <th className="py-2 pr-4 text-xs font-normal uppercase tracking-wide text-neutral-400">
-                  Item
-                </th>
-                <th className="py-2 pr-4 text-xs font-normal uppercase tracking-wide text-neutral-400">
-                  Price
-                </th>
-                <th className="py-2 pr-4 text-xs font-normal uppercase tracking-wide text-neutral-400">
-                  Quantity
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((transaction) => {
-                const transactionRow = formatTransactionForTable(transaction);
-                return (
-                  <tr key={transactionRow.id} className="border-b border-neutral-100">
-                    <td className="py-2 pr-4 text-neutral-600">{transactionRow.transactionDate}</td>
-                    <td className="py-2 pr-4 text-neutral-900">
-                      <Link
-                        href={`/transactions/${transactionRow.id}`}
-                        className="text-indigo-600 hover:underline"
-                      >
-                        {transactionRow.itemDescription}
-                      </Link>
-                    </td>
-                    <td className="py-2 pr-4 text-neutral-600">{transactionRow.agreedPrice}</td>
-                    <td className="py-2 pr-4 text-neutral-600">{transactionRow.quantityOrdered}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto min-w-0 w-full rounded border border-border bg-surface">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border bg-surface-muted text-left">
+                  <th className="px-5 py-3 text-xs font-normal uppercase tracking-wide text-foreground-subtle">
+                    Date
+                  </th>
+                  <th className="px-5 py-3 text-xs font-normal uppercase tracking-wide text-foreground-subtle">
+                    Item
+                  </th>
+                  <th className="px-5 py-3 text-xs font-normal uppercase tracking-wide text-foreground-subtle">
+                    Price
+                  </th>
+                  <th className="px-5 py-3 text-xs font-normal uppercase tracking-wide text-foreground-subtle">
+                    Quantity
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((transaction, index) => {
+                  const transactionRow = formatTransactionForTable(transaction);
+                  return (
+                    <tr
+                      key={transactionRow.id}
+                      className={`border-b border-border last:border-b-0 transition-colors duration-150 ease-out hover:bg-surface-muted/70 ${
+                        index % 2 === 1 ? "bg-canvas/60" : ""
+                      }`}
+                    >
+                      <td className="px-5 py-4 tabular-nums text-foreground-muted">{transactionRow.transactionDate}</td>
+                      <td className="px-5 py-4 text-foreground">
+                        <Link
+                          href={`/transactions/${transactionRow.id}`}
+                          className="transition-colors duration-150 ease-out hover:text-accent"
+                        >
+                          {transactionRow.itemDescription}
+                        </Link>
+                      </td>
+                      <td className="px-5 py-4 tabular-nums text-foreground-muted">{transactionRow.agreedPrice}</td>
+                      <td className="px-5 py-4 tabular-nums text-foreground-muted">{transactionRow.quantityOrdered}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

@@ -1,4 +1,4 @@
-const GEMINI_MODEL = "gemini-3.8-flash";
+const GEMINI_MODEL = "gemini-3.6-flash";
 
 export class RateLimitError extends Error {
   readonly status = 429;
@@ -6,6 +6,22 @@ export class RateLimitError extends Error {
   constructor() {
     super("Gemini request failed with status 429");
     this.name = "RateLimitError";
+  }
+}
+
+// Gemini returns 5xx (most commonly 503 "high demand") when the model is
+// transiently overloaded on Google's side — unrelated to our own request
+// rate. This is just as retryable as a 429 and, in practice, far more
+// common than actual rate-limiting.
+const RETRYABLE_SERVER_STATUSES = new Set([500, 502, 503, 504]);
+
+export class ServiceUnavailableError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Gemini request failed with status ${status}`);
+    this.name = "ServiceUnavailableError";
+    this.status = status;
   }
 }
 
@@ -26,6 +42,9 @@ export async function geminiGenerateContent(
   if (!response.ok) {
     if (response.status === 429) {
       throw new RateLimitError();
+    }
+    if (RETRYABLE_SERVER_STATUSES.has(response.status)) {
+      throw new ServiceUnavailableError(response.status);
     }
     throw new Error(`Gemini request failed with status ${response.status}`);
   }

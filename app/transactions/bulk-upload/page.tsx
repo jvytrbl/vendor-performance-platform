@@ -4,8 +4,8 @@ import BulkUploadForm from "@/components/transactions/BulkUploadForm";
 export default function BulkUploadPage() {
   return (
     <div className="flex flex-col gap-10">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="font-display text-4xl font-medium text-foreground">
           Bulk upload transactions
         </h1>
         <Link
