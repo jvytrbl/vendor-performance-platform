@@ -238,6 +238,42 @@ describe("GET /api/reports", () => {
         expect(body).toEqual({ reports: [], total: 31 });
       });
 
+      it("passes status, search, and sort into the repository query", async () => {
+        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(listReports).mockResolvedValue({ reports: [], total: 0 });
+        await GET(
+          new Request(
+            "http://localhost/api/reports?status=Draft&search=VPR-2026&sortBy=periodStart&sortOrder=asc&page=2",
+            { headers: { Authorization: "Bearer good.token" } }
+          )
+        );
+        expect(listReports).toHaveBeenCalledWith({
+          limit: 15,
+          offset: 15,
+          status: "Draft",
+          search: "VPR-2026",
+          sortBy: "periodStart",
+          sortOrder: "asc",
+        });
+      });
+
+      it("returns 400 when status is not Draft or Finalized", async () => {
+        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        const response = await GET(
+          new Request("http://localhost/api/reports?status=Archived", {
+            headers: { Authorization: "Bearer good.token" },
+          })
+        );
+        const body = await response.json();
+        expect(listReports).not.toHaveBeenCalled();
+        expect(response.status).toBe(400);
+        expect(body).toEqual({
+          error: "status must be Draft or Finalized",
+          code: "VALIDATION_FAILED",
+          field: "status",
+        });
+      });
+
       it("returns 400 when pageSize is not a positive integer", async () => {
         vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
         const response = await GET(

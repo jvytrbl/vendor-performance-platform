@@ -1,13 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, Upload, X } from "lucide-react";
-import {
-  fetchTransactions,
-  deleteTransaction,
-  type TransactionRecord,
-} from "@/lib/api/transactions";
-import { fetchAllVendors, type VendorRecord } from "@/lib/api/vendors";
+import { fetchTransactions, deleteTransaction } from "@/lib/api/transactions";
+import { fetchAllVendors } from "@/lib/api/vendors";
 import TransactionTable from "@/components/transactions/TransactionTable";
 import Button from "@/components/ui/Button";
 import ErrorBanner from "@/components/ui/ErrorBanner";
@@ -15,28 +11,20 @@ import LinkButton from "@/components/ui/LinkButton";
 import LoadingIndicator from "@/components/ui/LoadingIndicator";
 import TablePagination from "@/components/ui/TablePagination";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
+import { useAsyncData } from "@/lib/ui/useAsyncData";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination/parsePageParams";
-
-type Status = "loading" | "ready" | "error";
 
 export default function TransactionsPage() {
   const getAccessToken = useAccessToken();
-  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [vendors, setVendors] = useState<VendorRecord[]>([]);
-  const [status, setStatus] = useState<Status>("loading");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [vendorIdFilter, setVendorIdFilter] = useState("");
   const [dateFromFilter, setDateFromFilter] = useState("");
   const [dateToFilter, setDateToFilter] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
 
-  const loadTransactions = useCallback(async () => {
-    setStatus("loading");
-    setErrorMessage(null);
-    try {
-      const accessToken = await getAccessToken();
+  const { status, data, errorMessage, reload } = useAsyncData(
+    async (accessToken) => {
       const [result, vendorList] = await Promise.all([
         fetchTransactions(
           {
@@ -50,25 +38,18 @@ export default function TransactionsPage() {
         ),
         fetchAllVendors(accessToken),
       ]);
-      setTransactions(result.transactions);
-      setTotal(result.total);
-      setVendors(vendorList);
-      setStatus("ready");
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to load transactions"
-      );
-      setStatus("error");
-    }
-  }, [getAccessToken, vendorIdFilter, dateFromFilter, dateToFilter, page]);
-
-  useEffect(() => {
-    loadTransactions();
-  }, [loadTransactions]);
+      return { transactions: result.transactions, total: result.total, vendors: vendorList };
+    },
+    [vendorIdFilter, dateFromFilter, dateToFilter, page],
+    "Failed to load transactions"
+  );
+  const transactions = data?.transactions ?? [];
+  const total = data?.total ?? 0;
+  const vendors = data?.vendors ?? [];
 
   const handleDelete = async (id: number) => {
     setDeletingId(id);
-    setErrorMessage(null);
+    setDeleteErrorMessage(null);
     try {
       const accessToken = await getAccessToken();
       const result = await deleteTransaction(id, accessToken);
@@ -77,13 +58,13 @@ export default function TransactionsPage() {
         if (transactions.length === 1 && page > 1) {
           setPage(page - 1);
         } else {
-          await loadTransactions();
+          reload();
         }
       } else {
-        setErrorMessage(result.error);
+        setDeleteErrorMessage(result.error);
       }
     } catch (error) {
-      setErrorMessage(
+      setDeleteErrorMessage(
         error instanceof Error ? error.message : "Failed to delete transaction"
       );
     } finally {
@@ -207,7 +188,7 @@ export default function TransactionsPage() {
           <ErrorBanner
             message={errorMessage ?? "Failed to load transactions"}
             action={
-              <Button type="button" variant="secondary" onClick={loadTransactions}>
+              <Button type="button" variant="secondary" onClick={reload}>
                 Retry
               </Button>
             }
@@ -216,7 +197,7 @@ export default function TransactionsPage() {
 
         {status === "ready" && (
           <>
-            {errorMessage && <ErrorBanner message={errorMessage} />}
+            {deleteErrorMessage && <ErrorBanner message={deleteErrorMessage} />}
             <TransactionTable
                 transactions={transactions}
                 vendors={vendors}

@@ -1,9 +1,9 @@
 //Vendor list (route: /vendors)
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Search } from "lucide-react";
-import { fetchVendors, deleteVendor, type VendorRecord } from "@/lib/api/vendors";
+import { fetchVendors, deleteVendor } from "@/lib/api/vendors";
 import VendorTable from "@/components/vendors/VendorTable";
 import Button from "@/components/ui/Button";
 import ErrorBanner from "@/components/ui/ErrorBanner";
@@ -11,19 +11,15 @@ import LinkButton from "@/components/ui/LinkButton";
 import LoadingIndicator from "@/components/ui/LoadingIndicator";
 import TablePagination from "@/components/ui/TablePagination";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
+import { useAsyncData } from "@/lib/ui/useAsyncData";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination/parsePageParams";
 import { resolveDeleteFailureMessage } from "@/lib/ui/vendors/resolveDeleteFailureMessage";
 
-type Status = "loading" | "ready" | "error";
-
 export default function VendorsPage() {
   const getAccessToken = useAccessToken();
-  const [vendors, setVendors] = useState<VendorRecord[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState<Status>("loading");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const committedSearch = useRef("");
@@ -39,34 +35,22 @@ export default function VendorsPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const loadVendors = useCallback(async () => {
-    setStatus("loading");
-    setErrorMessage(null);
-    try {
-      const accessToken = await getAccessToken();
-      const result = await fetchVendors(accessToken, {
+  const { status, data, errorMessage, reload } = useAsyncData(
+    (accessToken) =>
+      fetchVendors(accessToken, {
         page,
         pageSize: DEFAULT_PAGE_SIZE,
         search: searchTerm || undefined,
-      });
-      setVendors(result.vendors);
-      setTotal(result.total);
-      setStatus("ready");
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to load vendors"
-      );
-      setStatus("error");
-    }
-  }, [getAccessToken, page, searchTerm]);
-
-  useEffect(() => {
-    loadVendors();
-  }, [loadVendors]);
+      }),
+    [page, searchTerm],
+    "Failed to load vendors"
+  );
+  const vendors = data?.vendors ?? [];
+  const total = data?.total ?? 0;
 
   const handleDelete = async (id: number) => {
     setDeletingId(id);
-    setErrorMessage(null);
+    setDeleteErrorMessage(null);
     try {
       const accessToken = await getAccessToken();
       const result = await deleteVendor(id, accessToken);
@@ -75,13 +59,13 @@ export default function VendorsPage() {
         if (vendors.length === 1 && page > 1) {
           setPage(page - 1);
         } else {
-          await loadVendors();
+          reload();
         }
       } else {
-        setErrorMessage(resolveDeleteFailureMessage(result.code, result.error));
+        setDeleteErrorMessage(resolveDeleteFailureMessage(result.code, result.error));
       }
     } catch (error) {
-      setErrorMessage(
+      setDeleteErrorMessage(
         error instanceof Error ? error.message : "Failed to delete vendor"
       );
     } finally {
@@ -132,7 +116,7 @@ export default function VendorsPage() {
           <ErrorBanner
             message={errorMessage ?? "Failed to load vendors"}
             action={
-              <Button type="button" variant="secondary" onClick={loadVendors}>
+              <Button type="button" variant="secondary" onClick={reload}>
                 Retry
               </Button>
             }
@@ -141,7 +125,7 @@ export default function VendorsPage() {
 
         {status === "ready" && (
           <>
-            {errorMessage && <ErrorBanner message={errorMessage} />}
+            {deleteErrorMessage && <ErrorBanner message={deleteErrorMessage} />}
             <VendorTable
                 vendors={vendors}
                 page={page}

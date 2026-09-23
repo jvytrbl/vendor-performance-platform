@@ -4,7 +4,7 @@ import { validateReportInput } from "../../../lib/domain/reports/validateReportI
 import { insertReport, listReports } from "@/lib/repositories/reports";
 import { getVendorById } from "@/lib/repositories/vendors";
 import { parsePageParams } from "../../../lib/pagination/parsePageParams";
-import { parseReportListFilters } from "@/lib/domain/reports/reportListQuery";
+import { parseReportListFilters } from "../../../lib/domain/reports/reportListQuery";
 
 export const POST = withAuth(async (request) => {
   const body = await request.json();

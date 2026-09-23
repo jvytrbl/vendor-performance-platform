@@ -5,6 +5,7 @@
      Canvas is the page. Surface matches that near-white for panels.
      Surface-muted is the sidebar and navbar. Border is the divider. */
   --color-canvas: oklch(98% 0 0);
+  --color-cream: oklch(99.2% 0.007 85);
   --color-surface: oklch(98% 0 0);
   --color-surface-muted: oklch(95% 0 0);
   --color-border: oklch(88% 0 0);
@@ -53,6 +54,7 @@
 
 @theme inline {
   --color-canvas: var(--color-canvas);
+  --color-cream: var(--color-cream);
   --color-surface: var(--color-surface);
   --color-surface-muted: var(--color-surface-muted);
   --color-border: var(--color-border);
@@ -138,6 +140,92 @@ select {
 
 .generate-phrase {
   transition: opacity 400ms ease-in-out;
+}
+
+.landing ::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-foreground);
+}
+
+.landing-name {
+  font-size: clamp(2.75rem, 6vw, 4.75rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.landing-card {
+  background: oklch(99.7% 0.004 85);
+  border: 1px solid oklch(24% 0.02 50 / 0.08);
+  border-radius: 8px;
+  box-shadow: 0 10px 32px oklch(24% 0.02 50 / 0.06);
+  padding: 2rem 1.75rem 1.85rem;
+}
+
+.landing-kicker {
+  margin-top: 0.45rem;
+  font-size: 0.8125rem;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  color: var(--color-foreground-muted);
+}
+
+.landing-points {
+  margin-top: 1.75rem;
+}
+
+.landing-point + .landing-point {
+  margin-top: 0.95rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid oklch(24% 0.02 50 / 0.08);
+}
+
+.landing-point-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--color-foreground);
+}
+
+.landing-point-copy {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--color-foreground);
+}
+
+.landing-action {
+  margin-top: 2.15rem;
+}
+
+.landing-auth {
+  margin-top: 0.65rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-foreground-subtle);
+}
+
+.landing-provenance {
+  margin-top: 1.6rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  color: var(--color-foreground-subtle);
+}
+
+@media (min-width: 640px) {
+  .landing-card {
+    padding: 2.5rem 2.25rem 2.35rem;
+  }
+
+  .landing-kicker {
+    font-size: 0.875rem;
+  }
 }
 
 /* Real prefers-reduced-motion check: users who ask for reduced motion get a

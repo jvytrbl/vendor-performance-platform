@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { useMsal } from "@azure/msal-react";
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
 
@@ -13,8 +14,14 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const { accounts } = useMsal();
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // The signed-out home page is a front door, not a work surface — no
+  // sidebar/navbar chrome around it. Every other route keeps its existing
+  // (ad hoc, per-route) signed-out handling; this is scoped to "/" only.
+  const isSignedOutHome = accounts.length === 0 && pathname === "/";
 
   useEffect(() => {
     setCollapsed(localStorage.getItem(STORAGE_KEY) === "true");
@@ -49,6 +56,10 @@ export default function AppShell({ children }: AppShellProps) {
       localStorage.setItem(STORAGE_KEY, String(next));
       return next;
     });
+  }
+
+  if (isSignedOutHome) {
+    return <div className="flex min-h-dvh flex-col bg-cream">{children}</div>;
   }
 
   return (

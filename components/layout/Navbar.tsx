@@ -44,15 +44,15 @@ export default function Navbar({ collapsed, menuOpen, onMenu }: NavbarProps) {
         ) : (
           <span className="flex items-center gap-2">
             <Image src="/vpp_logo.svg" alt="" width={48} height={48} className="h-12 w-12 shrink-0" />
-            <span className="font-display text-base font-medium leading-tight text-foreground" title="Vendor Performance Platform">
-              Vendor Performance
+            <span className="font-display text-2xl font-medium leading-tight text-foreground" title="Vendor Performance Platform">
+              Vantage
             </span>
           </span>
         )}
       </div>
       <span className="flex min-w-0 items-center gap-2 truncate px-3 md:hidden">
         <Image src="/vpp_logo.svg" alt="" width={48} height={48} className="h-12 w-12 shrink-0" />
-        <span className="font-display text-base font-medium text-foreground" title="Vendor Performance Platform">
+        <span className="font-display text-2xl font-medium text-foreground" title="Vendor Performance Platform">
           Vendor Performance
         </span>
       </span>

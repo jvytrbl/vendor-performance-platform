@@ -1,6 +1,6 @@
 export type GenerateContent = (prompt: string) => Promise<string>;
 
-function buildPrompt(data: Record<string, number | string | null | undefined>): string {
+export function buildPrompt(data: Record<string, number | string | null | undefined>): string {
     return [
         "You write narrative for a vendor performance report.",
         "Use only the numeric values in the following JSON.",
@@ -19,6 +19,7 @@ function buildPrompt(data: Record<string, number | string | null | undefined>): 
         "Pricing Analysis covers overcharge and undercharge.",
         "Order Accuracy covers shortfall and over-delivery.",
         "Do not repeat the same paragraph in more than one section.",
+        "Within each section, separate the discussion of each vendor with a blank line so vendors are clearly distinguished as separate paragraphs.",
         JSON.stringify(data),
     ].join("\n");
 }

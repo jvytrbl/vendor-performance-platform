@@ -100,6 +100,28 @@ describe("listReports", () => {
     expect(request.query.mock.calls[1][0]).toContain("OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY");
     expect(result).toEqual({ reports: [], total: 31 });
   });
+
+  it("binds the search value and does not place it in the SQL text", async () => {
+    const request: any = {};
+    request.input = vi.fn().mockReturnValue(request);
+    request.query = vi
+      .fn()
+      .mockResolvedValueOnce({ recordset: [{ total: 1 }] })
+      .mockResolvedValueOnce({ recordset: [] });
+    vi.mocked(getDbPool).mockResolvedValue({ request: () => request } as any);
+
+    await listReports({ limit: 15, offset: 0, search: "VPR-2026", status: "Draft" });
+
+    const countSql = request.query.mock.calls[0][0] as string;
+    const pageSql = request.query.mock.calls[1][0] as string;
+    expect(countSql).toContain("WHERE status = @status AND reference_number LIKE @search");
+    expect(pageSql).toContain("WHERE status = @status AND reference_number LIKE @search");
+    expect(pageSql).toContain("ORDER BY created_at DESC");
+    expect(countSql).not.toContain("VPR-2026");
+    expect(pageSql).not.toContain("VPR-2026");
+    expect(request.input).toHaveBeenCalledWith("search", "%VPR-2026%");
+    expect(request.input).toHaveBeenCalledWith("status", "Draft");
+  });
 });
 
 describe("getReportById", () => {

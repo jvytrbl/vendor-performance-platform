@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Vendor Performance Platform",
+  title: "Vantage",
   description: "Periodic vendor performance reports from recorded transactions.",
 };
 

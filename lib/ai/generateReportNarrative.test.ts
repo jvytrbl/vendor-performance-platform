@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { generateReportNarrative } from "./generateReportNarrative";
+import { buildPrompt, generateReportNarrative } from "./generateReportNarrative";
 import { buildMetricPromptData } from "../domain/reports/buildMetricPromptData";
 import { geminiGenerateContent } from "./geminiGenerateContent";
 
@@ -24,6 +24,36 @@ const data = buildMetricPromptData({
         { vendorId: 2, metrics: { ...zeros, onTimeDeliveryRate: 40 } },
         { vendorId: 3, metrics: { ...zeros, onTimeDeliveryRate: 60 } },
     ],
+});
+
+describe("buildPrompt", () => {
+  it("adds the vendor blank-line instruction without changing existing instructions or JSON shape", () => {
+    const prompt = buildPrompt(data);
+    const lines = prompt.split("\n");
+    const jsonLine = lines[lines.length - 1];
+
+    expect(prompt).toContain(
+      "Within each section, separate the discussion of each vendor with a blank line so vendors are clearly distinguished as separate paragraphs."
+    );
+    expect(prompt).toContain("You write narrative for a vendor performance report.");
+    expect(prompt).toContain("Use only the numeric values in the following JSON.");
+    expect(prompt).toContain("Do not invent any numeric value that is not present.");
+    expect(prompt).toContain("If a field is null, do not state a number for that metric.");
+    expect(prompt).toContain(
+      "When you state a number, either quote it exactly as given (same decimal places) or round it to the nearest whole number — never round to any other precision, and never estimate or approximate a value."
+    );
+    expect(prompt).toContain("vendor{id}_name");
+    expect(prompt).toContain(
+      "When you characterize performance, compare against both the prior period and the peer average."
+    );
+    expect(prompt).toContain("Vendor Summary:");
+    expect(prompt).toContain("Delivery Performance:");
+    expect(prompt).toContain("Pricing Analysis:");
+    expect(prompt).toContain("Order Accuracy:");
+    expect(prompt).toContain("Do not repeat the same paragraph");
+    expect(jsonLine).toBe(JSON.stringify(data));
+    expect(JSON.parse(jsonLine)).toEqual(data);
+  });
 });
 
 describe("generateReportNarrative", () => {

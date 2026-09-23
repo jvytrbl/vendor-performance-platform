@@ -20,6 +20,10 @@ export interface ReportInput {
 export interface ReportListQuery {
   page?: number;
   pageSize?: number;
+  status?: "Draft" | "Finalized";
+  search?: string;
+  sortBy?: "periodStart" | "createdAt";
+  sortOrder?: "asc" | "desc";
 }
 
 export interface ReportPage {
@@ -34,6 +38,10 @@ export async function fetchReports(
   const params = new URLSearchParams();
   if (query.page !== undefined) params.set("page", String(query.page));
   if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  if (query.status) params.set("status", query.status);
+  if (query.search) params.set("search", query.search);
+  if (query.sortBy) params.set("sortBy", query.sortBy);
+  if (query.sortOrder) params.set("sortOrder", query.sortOrder);
   const search = params.toString();
   const response = await fetch(`/api/reports${search ? `?${search}` : ""}`, {
     headers: { Authorization: `Bearer ${accessToken}` },

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Plus, Users } from "lucide-react";
+import { Check, ChevronDown, Plus, Search, Users } from "lucide-react";
 import type { VendorRecord } from "@/lib/api/vendors";
 import { fetchAllVendors } from "@/lib/api/vendors";
 import type { ReportInput } from "@/lib/domain/reports/validateReportInput";
@@ -55,6 +55,7 @@ export default function AddReportForm() {
     periodType: "Quarterly",
     selectedVendorIds: new Set(),
   });
+  const [vendorSearch, setVendorSearch] = useState("");
 
   const loadVendors = useCallback(async () => {
     try {
@@ -99,6 +100,36 @@ export default function AddReportForm() {
     });
     setErrorMessage(null);
   };
+
+  const sortedVendors = useMemo(
+    () =>
+      [...vendors].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+      ),
+    [vendors]
+  );
+
+  const filteredVendors = useMemo(() => {
+    const term = vendorSearch.trim().toLowerCase();
+    if (!term) return sortedVendors;
+    return sortedVendors.filter((vendor) => vendor.name.toLowerCase().includes(term));
+  }, [sortedVendors, vendorSearch]);
+
+  function selectFilteredVendors() {
+    setFormData((prev) => {
+      const next = new Set(prev.selectedVendorIds);
+      for (const vendor of filteredVendors) {
+        next.add(vendor.id);
+      }
+      return { ...prev, selectedVendorIds: next };
+    });
+    setErrorMessage(null);
+  }
+
+  function clearSelectedVendors() {
+    setFormData((prev) => ({ ...prev, selectedVendorIds: new Set() }));
+    setErrorMessage(null);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,29 +217,42 @@ export default function AddReportForm() {
   }
 
   const currentYear = new Date().getFullYear();
+  const selectedCount = formData.selectedVendorIds.size;
+  const createLabel =
+    status === "submitting"
+      ? "Creating…"
+      : selectedCount === 0
+        ? "Create Report"
+        : `Create Report (${selectedCount} vendor${selectedCount === 1 ? "" : "s"})`;
+  const selectClass =
+    "min-h-11 w-full appearance-none rounded border border-border bg-surface py-2 pl-3 pr-10 text-sm text-foreground focus:border-accent focus:outline-none";
 
   return (
-    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-12">
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-8">
       {errorMessage && <ErrorBanner message={errorMessage} />}
 
-      <section className="flex flex-col gap-6">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">Period</h2>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      <section className="flex flex-col gap-6 rounded-lg border border-border bg-surface-muted p-8">
+        <h2 className="font-display text-2xl font-medium text-foreground">Period</h2>
 
         <div className="flex flex-col gap-2">
           <label htmlFor="periodType" className="text-sm font-medium text-foreground">
             Period Type
           </label>
-          <select
-            id="periodType"
-            value={formData.periodType}
-            onChange={(e) =>
-              handlePeriodTypeChange(e.target.value as "Quarterly" | "Custom")
-            }
-            className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
-          >
-            <option value="Quarterly">Quarterly</option>
-            <option value="Custom">Custom</option>
-          </select>
+          <div className="relative">
+            <select
+              id="periodType"
+              value={formData.periodType}
+              onChange={(e) =>
+                handlePeriodTypeChange(e.target.value as "Quarterly" | "Custom")
+              }
+              className={selectClass}
+            >
+              <option value="Quarterly">Quarterly</option>
+              <option value="Custom">Custom</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+          </div>
         </div>
 
       {formData.periodType === "Quarterly" && (
@@ -217,13 +261,14 @@ export default function AddReportForm() {
             <label htmlFor="quarterYear" className="text-sm font-medium text-foreground">
               Year
             </label>
+            <div className="relative">
             <select
               id="quarterYear"
               value={formData.quarterYear || ""}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, quarterYear: e.target.value }))
               }
-              className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
+              className={selectClass}
             >
               <option value="">Select year</option>
               {[currentYear - 1, currentYear, currentYear + 1].map((year) => (
@@ -232,19 +277,22 @@ export default function AddReportForm() {
                 </option>
               ))}
             </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+            </div>
           </div>
 
           <div className="flex flex-col gap-2">
             <label htmlFor="quarterNumber" className="text-sm font-medium text-foreground">
               Quarter
             </label>
+            <div className="relative">
             <select
               id="quarterNumber"
               value={formData.quarterNumber || ""}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, quarterNumber: e.target.value }))
               }
-              className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
+              className={selectClass}
             >
               <option value="">Select quarter</option>
               <option value="1">Q1 (Jan - Mar)</option>
@@ -252,6 +300,8 @@ export default function AddReportForm() {
               <option value="3">Q3 (Jul - Sep)</option>
               <option value="4">Q4 (Oct - Dec)</option>
             </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+            </div>
           </div>
         </>
       )}
@@ -269,7 +319,7 @@ export default function AddReportForm() {
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, customStartDate: e.target.value }))
               }
-              className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
+              className="min-h-11 w-full rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
             />
             {fieldError?.field === "period_start" && (
               <ErrorBanner message={fieldError.message} />
@@ -287,7 +337,7 @@ export default function AddReportForm() {
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, customEndDate: e.target.value }))
               }
-              className="rounded border border-border bg-surface px-3 py-2 text-sm text-foreground"
+              className="min-h-11 w-full rounded border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
             />
             {fieldError?.field === "period_end" && (
               <ErrorBanner message={fieldError.message} />
@@ -298,46 +348,96 @@ export default function AddReportForm() {
 
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="flex items-center gap-1.5 text-lg font-semibold tracking-tight text-foreground">
-          <Users className="h-4 w-4 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
-          Vendors
-        </h2>
-        <div className="flex flex-col gap-2">
-          {vendors.length === 0 && !errorMessage ? (
-            <div className="flex flex-col items-start gap-2">
-              <p className="max-w-[65ch] text-sm leading-relaxed text-foreground-muted">
-                No vendors yet. A report needs at least one vendor.
-              </p>
-              <Link href="/vendors/add" className="text-sm font-medium text-accent hover:underline">
-                Add a vendor
-              </Link>
-            </div>
-          ) : vendors.length === 0 ? null : (
-            vendors.map((vendor) => (
-              <label
-                key={vendor.id}
-                className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground"
-              >
-                <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.selectedVendorIds.has(vendor.id)}
-                    onChange={(e) => handleVendorToggle(vendor.id, e.target.checked)}
-                    className="peer absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded border border-border bg-surface transition-colors duration-150 ease-out checked:border-accent checked:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  />
-                  <Check
-                    className="pointer-events-none h-3 w-3 text-accent-foreground opacity-0 peer-checked:opacity-100"
-                    strokeWidth={3}
-                    aria-hidden="true"
-                  />
-                </span>
-                {vendor.name}
-              </label>
-            ))
+      <section className="flex flex-col gap-5 rounded-lg border border-border bg-surface-muted p-8">
+        <div className="flex flex-col gap-1">
+          <h2 className="flex items-center gap-1.5 font-display text-2xl font-medium text-foreground">
+            <Users className="h-5 w-5 text-foreground-subtle" strokeWidth={1.75} aria-hidden="true" />
+            Vendors
+          </h2>
+          {vendors.length > 0 && (
+            <p className="text-sm text-foreground-muted">
+              {selectedCount} of {vendors.length} selected
+            </p>
           )}
         </div>
+
+        {vendors.length === 0 && !errorMessage ? (
+          <div className="flex flex-col items-start gap-2">
+            <p className="max-w-[65ch] text-sm leading-relaxed text-foreground-muted">
+              No vendors yet. A report needs at least one vendor.
+            </p>
+            <Link href="/vendors/add" className="text-sm font-medium text-accent hover:underline">
+              Add a vendor
+            </Link>
+          </div>
+        ) : vendors.length === 0 ? null : (
+          <>
+            <div className="flex flex-col gap-3">
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground-subtle"
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+                <input
+                  type="text"
+                  value={vendorSearch}
+                  onChange={(event) => setVendorSearch(event.target.value)}
+                  placeholder="Search vendors…"
+                  aria-label="Search vendors"
+                  className="min-h-11 w-full rounded border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-foreground-muted focus:border-accent focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={selectFilteredVendors}
+                  disabled={filteredVendors.length === 0}
+                  className="text-sm font-medium text-accent hover:underline disabled:text-foreground-subtle disabled:no-underline"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelectedVendors}
+                  disabled={selectedCount === 0}
+                  className="text-sm font-medium text-foreground-muted hover:text-foreground hover:underline disabled:text-foreground-subtle disabled:no-underline"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+            <div className="flex max-h-96 flex-col gap-2 overflow-y-auto rounded border border-border bg-surface p-3">
+              {filteredVendors.length === 0 ? (
+                <p className="px-1 py-6 text-center text-sm text-foreground-muted">No vendors match.</p>
+              ) : (
+                filteredVendors.map((vendor) => (
+                  <label
+                    key={vendor.id}
+                    className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground"
+                  >
+                    <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.selectedVendorIds.has(vendor.id)}
+                        onChange={(e) => handleVendorToggle(vendor.id, e.target.checked)}
+                        className="peer absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded border border-border bg-surface transition-colors duration-150 ease-out checked:border-accent checked:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      />
+                      <Check
+                        className="pointer-events-none h-3 w-3 text-accent-foreground opacity-0 peer-checked:opacity-100"
+                        strokeWidth={3}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    {vendor.name}
+                  </label>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </section>
+      </div>
 
       <Button
         type="submit"
@@ -347,7 +447,7 @@ export default function AddReportForm() {
         icon={<Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />}
         className="self-start"
       >
-        {status === "submitting" ? "Creating…" : "Create Report"}
+        {createLabel}
       </Button>
     </form>
   );

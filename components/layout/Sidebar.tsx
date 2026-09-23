@@ -8,7 +8,7 @@ import {
   ChevronLeft,
   Clock,
   FileText,
-  LayoutDashboard,
+  Home,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,7 +20,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", enabled: false, icon: LayoutDashboard },
+  { label: "Home", href: "/", enabled: true, icon: Home },
   { label: "Vendors", href: "/vendors", enabled: true, icon: Building2 },
   { label: "Transactions", href: "/transactions", enabled: true, icon: ArrowLeftRight },
   { label: "Reports", href: "/reports", enabled: true, icon: FileText },
@@ -46,7 +46,8 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onNavigate }:
     >
       <nav className={showLabels ? "flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 pt-4" : "flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pt-4"}>
         {NAV_ITEMS.map((item) => {
-          const isActive = item.enabled && pathname.startsWith(item.href);
+          const isActive =
+            item.enabled && (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
           const Icon = item.icon;
 
           if (!item.enabled) {

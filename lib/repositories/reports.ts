@@ -1,6 +1,6 @@
 import { getDbPool } from "@/lib/db";
 import type { ReportInput } from "@/lib/domain/reports/validateReportInput";
-import { buildReportListQuery, type ReportSortBy, type ReportSortOrder, type ReportStatusFilter } from "@/lib/domain/reports/reportListQuery";
+import { buildReportListQuery, type ReportSortBy, type ReportSortOrder, type ReportStatusFilter } from "../domain/reports/reportListQuery";
 import type { ReportSectionInput } from "../domain/reports/validateReportSections";
 import type { GeneratedMetricRow } from "@/lib/domain/reports/runReportGeneration";
 

@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
-import { ArrowLeft, Download, Info, Pencil, Save } from "lucide-react";
+import { ArrowLeft, Download, Info, Pencil, Save, Trash2 } from "lucide-react";
 import type { ReportSectionInput } from "@/lib/domain/reports/validateReportSections";
 import { validateReportReadyToFinalize } from "@/lib/domain/reports/validateReportReadyToFinalize";
 import {
+  deleteReport,
   exportReport,
   fetchReport,
   finalizeReport,
@@ -26,11 +28,15 @@ import {
 import { consumeAutoGenerateFlag } from "@/lib/ui/reports/autoGenerateFlag";
 import { resolveReportActionFailureMessage } from "@/lib/ui/reports/resolveReportActionFailureMessage";
 import { getMetricSeverity, type ColoredMetricKey } from "@/lib/ui/reports/getMetricSeverity";
+import {
+  emphasizeFirstVendorMentions,
+  splitNarrativeParagraphs,
+} from "@/lib/ui/reports/splitNarrativeParagraphs";
 import Button from "@/components/ui/Button";
 import ErrorBanner from "@/components/ui/ErrorBanner";
 import LoadingIndicator from "@/components/ui/LoadingIndicator";
-import ProgressBar from "@/components/ui/ProgressBar";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { nextGenerationProgress } from "@/lib/ui/reports/generationProgress";
 
 const Lottie = dynamic(() => import("lottie-react").then((mod) => ({ default: mod.Lottie })), {
   ssr: false,
@@ -116,20 +122,31 @@ function sectionsHaveText(sections: ReportSectionInput): boolean {
   return SECTIONS.some((section) => sections[section.key].trim() !== "");
 }
 
-function proseParagraphs(text: string): string[] {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-  return trimmed.split(/\n{2,}/);
+function NarrativeParagraph({
+  text,
+  vendorNames,
+}: {
+  text: string;
+  vendorNames: string[];
+}) {
+  const segments = emphasizeFirstVendorMentions(text, vendorNames);
+  return (
+    <p className="max-w-prose whitespace-pre-wrap text-base leading-relaxed text-foreground">
+      {segments.map((segment, index) =>
+        segment.emphasize ? <strong key={index}>{segment.text}</strong> : segment.text
+      )}
+    </p>
+  );
 }
 
 const GENERATING_PHRASES = [
   "Gathering vendor data...",
-  "Computing performance metrics...",
+  "Analyzing performance metrics...",
   "Writing your report...",
-  "Checking the numbers...",
+  "Finishing up...",
 ];
 
-function GeneratingAnimation() {
+function GeneratingMark() {
   const [reduced, setReduced] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -141,7 +158,7 @@ function GeneratingAnimation() {
   }, []);
 
   if (reduced === null) {
-    return <div className="h-40 w-40" aria-hidden="true" />;
+    return <div className="size-48 shrink-0" aria-hidden="true" />;
   }
 
   return (
@@ -150,7 +167,8 @@ function GeneratingAnimation() {
       src="/animations/loading.json"
       autoplay={!reduced}
       loop={!reduced}
-      className="h-40 w-40"
+      className="size-48 shrink-0"
+      style={{ width: 192, height: 192 }}
       aria-hidden="true"
     />
   );
@@ -158,24 +176,23 @@ function GeneratingAnimation() {
 
 function GeneratingPhrases() {
   const [index, setIndex] = useState(0);
+  const lastIndex = GENERATING_PHRASES.length - 1;
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setIndex((current) => (current + 1) % GENERATING_PHRASES.length);
-    }, 1800);
-
-    return () => window.clearInterval(interval);
-  }, []);
+    if (index >= lastIndex) return;
+    const timer = window.setTimeout(() => setIndex((current) => current + 1), 4000);
+    return () => window.clearTimeout(timer);
+  }, [index, lastIndex]);
 
   return (
-    <div className="relative h-5 w-full">
+    <div className="relative h-6 w-full">
       {GENERATING_PHRASES.map((phrase, phraseIndex) => {
         const active = phraseIndex === index;
         return (
           <p
             key={phrase}
             aria-hidden={active ? undefined : true}
-            className={`generate-phrase absolute inset-x-0 text-center text-sm text-foreground-muted ${
+            className={`generate-phrase absolute inset-x-0 text-center text-base text-foreground ${
               active ? "opacity-100" : "opacity-0"
             }`}
           >
@@ -190,6 +207,43 @@ function GeneratingPhrases() {
   );
 }
 
+function EasedProgress({ complete }: { complete: boolean }) {
+  const fillRef = useRef<HTMLDivElement>(null);
+  const startedAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    const fill = fillRef.current;
+    if (!fill) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (complete) {
+      fill.style.width = "100%";
+      return;
+    }
+    if (reduced) {
+      fill.style.width = "55%";
+      return;
+    }
+    let frame = 0;
+    const tick = (now: number) => {
+      if (startedAt.current === null) startedAt.current = now;
+      const elapsed = (now - startedAt.current) / 1000;
+      fill.style.width = `${nextGenerationProgress(elapsed) * 100}%`;
+      frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [complete]);
+
+  return (
+    <div className="h-1 w-full overflow-hidden rounded-full bg-border" aria-hidden="true">
+      <div
+        ref={fillRef}
+        className="h-full w-0 rounded-full bg-accent motion-safe:transition-[width] motion-safe:duration-300 motion-safe:ease-out"
+      />
+    </div>
+  );
+}
+
 export default function ReportEditor({
   id,
   startInEdit = false,
@@ -198,19 +252,22 @@ export default function ReportEditor({
   startInEdit?: boolean;
 }) {
   const { instance } = useMsal();
+  const router = useRouter();
   const getAccessToken = useAccessToken();
   const [report, setReport] = useState<ReportDetail | null>(null);
   const [sections, setSections] = useState<ReportSectionInput>(emptySections());
   const [restored, setRestored] = useState(false);
-  const [busy, setBusy] = useState<"saving" | "generating" | "finalizing" | "exporting" | null>(
-    null
-  );
+  const [busy, setBusy] = useState<
+    "saving" | "generating" | "finalizing" | "exporting" | "deleting" | null
+  >(null);
+  const [generationSettling, setGenerationSettling] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<"load" | "generate" | "other" | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editBaseline, setEditBaseline] = useState<ReportSectionInput | null>(null);
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
   const [confirmingGenerate, setConfirmingGenerate] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [vendorNames, setVendorNames] = useState<Map<number, string>>(new Map());
   const appliedEditFlag = useRef(false);
   const confirmRef = useRef<HTMLDivElement>(null);
@@ -225,28 +282,49 @@ export default function ReportEditor({
     setErrorMessage(message);
   }
 
+  // load() is also called directly from the "Retry" button below (a click
+  // handler, not an effect — setState there is fine), so it stays a
+  // standalone async function rather than moving entirely inline.
   const load = useCallback(async () => {
     const accessToken = await getAccessToken();
-    const loaded = await fetchReport(id, accessToken);
+    // Independent requests, fired together. Vendor names are non-critical
+    // (falls back to an empty map on failure); the report itself is not,
+    // so only its rejection should reach the outer .catch below.
+    const [loaded, vendors] = await Promise.all([
+      fetchReport(id, accessToken),
+      fetchAllVendors(accessToken).catch(() => null),
+    ]);
     const stashed = restoreDraftFields(id, window.sessionStorage);
     setReport(loaded);
     setSections(stashed ?? sectionsFromReport(loaded));
     setRestored(stashed !== null);
-    try {
-      const vendors = await fetchAllVendors(accessToken);
-      setVendorNames(new Map(vendors.map((vendor) => [vendor.id, vendor.name])));
-    } catch {
-      setVendorNames(new Map());
-    }
+    setVendorNames(
+      vendors ? new Map(vendors.map((vendor) => [vendor.id, vendor.name])) : new Map()
+    );
   }, [getAccessToken, id]);
 
   useEffect(() => {
-    load().catch((error) => {
-      showReportError(
-        "load",
-        error instanceof Error ? error.message : "Failed to load report"
-      );
-    });
+    // Inline IIFE, not a call to the `load` callback above — calling a
+    // separately-referenced async function from an effect trips
+    // react-hooks/set-state-in-effect regardless of where that function
+    // puts its own await; an inline function defined *in* the effect,
+    // with setState only after its own first await, is what the rule
+    // actually accepts.
+    let cancelled = false;
+    (async () => {
+      try {
+        await load();
+      } catch (error) {
+        if (cancelled) return;
+        showReportError(
+          "load",
+          error instanceof Error ? error.message : "Failed to load report"
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   const isDraft = report?.status === "Draft";
@@ -287,6 +365,7 @@ export default function ReportEditor({
     setConfirmingGenerate(false);
     setBusy("generating");
     clearReportError();
+    let succeeded = false;
     try {
       const accessToken = await getAccessToken();
       const result = await generateReport(id, accessToken);
@@ -300,12 +379,18 @@ export default function ReportEditor({
       setReport(refreshed);
       setSections(sectionsFromReport(refreshed));
       setIsEditing(false);
+      succeeded = true;
     } catch (error) {
       showReportError(
         "generate",
         error instanceof Error ? error.message : "Failed to generate report"
       );
     } finally {
+      if (succeeded) {
+        setGenerationSettling(true);
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+        setGenerationSettling(false);
+      }
       setBusy(null);
     }
   }
@@ -313,13 +398,15 @@ export default function ReportEditor({
   // Auto-trigger the first generation attempt when arriving fresh from
   // Create Report. This calls handleGenerate() directly, so that first run
   // does not ask for confirmation. A later click on Generate confirms when
-  // any section already has text.
+  // any section already has text. The guard runs synchronously (no setState
+  // in it); only the actual trigger is deferred behind a microtask so it's
+  // not the synchronous top-level statement of the effect.
   useEffect(() => {
     if (!report || hasAutoGeneratedRef.current) return;
     const shouldAutoGenerate = consumeAutoGenerateFlag(report.id, window.sessionStorage);
     if (!shouldAutoGenerate) return;
     hasAutoGeneratedRef.current = true;
-    handleGenerate();
+    void Promise.resolve().then(() => handleGenerate());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report]);
 
@@ -327,12 +414,14 @@ export default function ReportEditor({
     if (!report || appliedEditFlag.current) return;
     appliedEditFlag.current = true;
     if (startInEdit && report.status === "Draft") {
-      setEditBaseline(sections);
-      setIsEditing(true);
+      void Promise.resolve().then(() => {
+        setEditBaseline(sections);
+        setIsEditing(true);
+      });
     }
   }, [report, sections, startInEdit]);
 
-  const confirmOpen = confirmingFinalize || confirmingGenerate;
+  const confirmOpen = confirmingFinalize || confirmingGenerate || confirmingDelete;
 
   useEffect(() => {
     if (!confirmOpen || busy !== null) return;
@@ -340,6 +429,7 @@ export default function ReportEditor({
       if (event.key === "Escape") {
         setConfirmingFinalize(false);
         setConfirmingGenerate(false);
+        setConfirmingDelete(false);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -350,6 +440,7 @@ export default function ReportEditor({
   function requestGenerate() {
     if (sectionsHaveText(sections)) {
       setConfirmingFinalize(false);
+      setConfirmingDelete(false);
       setConfirmingGenerate(true);
       return;
     }
@@ -359,8 +450,33 @@ export default function ReportEditor({
   function beginEdit() {
     setConfirmingFinalize(false);
     setConfirmingGenerate(false);
+    setConfirmingDelete(false);
     setEditBaseline(sections);
     setIsEditing(true);
+  }
+
+  async function handleDelete() {
+    if (!isDraft || busy) return;
+    setBusy("deleting");
+    clearReportError();
+    try {
+      const accessToken = await getAccessToken();
+      const result = await deleteReport(id, accessToken);
+      if (result.outcome === "error") {
+        setConfirmingDelete(false);
+        showReportError("other", resolveReportActionFailureMessage(result.code));
+        return;
+      }
+      router.push("/reports");
+    } catch (error) {
+      setConfirmingDelete(false);
+      showReportError(
+        "other",
+        error instanceof Error ? error.message : "Failed to delete report"
+      );
+    } finally {
+      setBusy(null);
+    }
   }
 
   function cancelEdit() {
@@ -449,6 +565,9 @@ export default function ReportEditor({
   const readyToFinalize = validateReportReadyToFinalize(sections).valid;
   const periodStart = periodDate(report.period_start);
   const periodEnd = periodDate(report.period_end);
+  const reportVendorNames = report.vendor_ids
+    .map((vendorId) => vendorNames.get(vendorId))
+    .filter((name): name is string => Boolean(name));
 
   return (
     <div
@@ -503,31 +622,81 @@ export default function ReportEditor({
       )}
 
       {busy === "generating" ? (
-        <div className="flex min-h-[24rem] flex-col items-center justify-center gap-6 rounded border border-border bg-surface px-6 py-16">
-          <GeneratingAnimation />
-          <div className="flex w-full max-w-md flex-col items-center gap-4">
+        <div className="flex flex-col items-center justify-center gap-4 rounded border border-border bg-surface px-6 py-8">
+          <GeneratingMark />
+          <div className="flex w-full max-w-sm flex-col items-center gap-4">
             <GeneratingPhrases />
-            <ProgressBar motion="pendulum" />
+            <EasedProgress complete={generationSettling} />
           </div>
         </div>
       ) : (
         <>
           <div className="flex min-w-0 flex-col lg:col-start-1 lg:row-start-2">
             {isDraft && !isEditing && (
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busy !== null}
-                onClick={beginEdit}
-                icon={<Pencil className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
-                className="mb-8 self-start"
-              >
-                Edit
-              </Button>
+              <div className="mb-8 flex flex-col items-start gap-3">
+                {!confirmingDelete && (
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={busy !== null}
+                      onClick={beginEdit}
+                      icon={<Pencil className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        setConfirmingFinalize(false);
+                        setConfirmingGenerate(false);
+                        setConfirmingDelete(true);
+                      }}
+                      icon={<Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                )}
+                {confirmingDelete && (
+                  <div
+                    ref={confirmRef}
+                    tabIndex={-1}
+                    role="region"
+                    aria-label="Confirm delete"
+                    className="flex max-w-prose flex-col gap-3 rounded border border-border bg-surface px-4 py-4 outline-none"
+                  >
+                    <p className="text-sm leading-relaxed text-foreground">
+                      Delete this report? This can&apos;t be undone.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <Button
+                        type="button"
+                        variant="danger"
+                        disabled={busy !== null}
+                        isLoading={busy === "deleting"}
+                        onClick={handleDelete}
+                      >
+                        {busy === "deleting" ? "Deleting…" : "Yes, delete"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={busy !== null}
+                        onClick={() => setConfirmingDelete(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {SECTIONS.map((section, index) => {
-              const paragraphs = proseParagraphs(sections[section.key]);
+              const paragraphs = splitNarrativeParagraphs(sections[section.key]);
               return (
                 <section
                   key={section.key}
@@ -552,21 +721,20 @@ export default function ReportEditor({
                           [section.key]: event.target.value,
                         }))
                       }
-                      className="max-w-[65ch] rounded border border-border bg-surface px-3 py-2 text-base leading-relaxed text-foreground disabled:opacity-60"
+                      className="max-w-prose rounded border border-border bg-surface px-3 py-2 text-base leading-relaxed text-foreground disabled:opacity-60"
                     />
                   ) : paragraphs.length === 0 ? (
-                    <p className="max-w-[65ch] text-base leading-relaxed text-foreground-muted">
+                    <p className="max-w-prose text-base leading-relaxed text-foreground-muted">
                       Not written yet.
                     </p>
                   ) : (
-                    <div className="flex max-w-[65ch] flex-col gap-5">
-                      {paragraphs.map((paragraph, index) => (
-                        <p
-                          key={index}
-                          className="whitespace-pre-wrap text-base leading-relaxed text-foreground"
-                        >
-                          {paragraph}
-                        </p>
+                    <div className="flex max-w-prose flex-col gap-5">
+                      {paragraphs.map((paragraph, paragraphIndex) => (
+                        <NarrativeParagraph
+                          key={paragraphIndex}
+                          text={paragraph}
+                          vendorNames={reportVendorNames}
+                        />
                       ))}
                     </div>
                   )}
@@ -791,6 +959,7 @@ export default function ReportEditor({
                       disabled={busy !== null}
                       onClick={() => {
                         setConfirmingGenerate(false);
+                        setConfirmingDelete(false);
                         setConfirmingFinalize(true);
                       }}
                     >
