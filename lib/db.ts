@@ -29,6 +29,8 @@ export async function getDbPool(): Promise<ConnectionPool> {
     return cachedPool;
   }
 
+  const tStart = Date.now();
+
   // Step 1: Authenticate to Azure using the Service Principal credentials
   // (reads AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET from env)
   const credential = new DefaultAzureCredential();
@@ -40,7 +42,9 @@ export async function getDbPool(): Promise<ConnectionPool> {
   }
 
   const secretClient = new SecretClient(vaultUrl, credential);
+  const tSecret = Date.now();
   const secret = await secretClient.getSecret("sql-connection-string");
+  console.log(`[db-cold-start] Key Vault getSecret: ${Date.now() - tSecret}ms`);
 
   if (!secret.value) {
     throw new Error("sql-connection-string secret exists but has no value");
@@ -48,7 +52,10 @@ export async function getDbPool(): Promise<ConnectionPool> {
 
   // Step 3: Open a new connection pool using that connection string
   const pool = new sql.ConnectionPool(secret.value);
+  const tConnect = Date.now();
   await pool.connect();
+  console.log(`[db-cold-start] SQL pool.connect(): ${Date.now() - tConnect}ms`);
+  console.log(`[db-cold-start] total getDbPool(): ${Date.now() - tStart}ms`);
 
   // Step 4: Cache it for reuse on future calls
   cachedPool = pool;

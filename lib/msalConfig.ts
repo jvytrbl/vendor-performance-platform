@@ -7,7 +7,11 @@ export const msalConfig: Configuration = {
     redirectUri: typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
   },
   cache: {
-    cacheLocation: "sessionStorage",
+    // localStorage (not sessionStorage) so the session survives tab close/
+    // reopen and so Playwright's context.storageState() — which only
+    // captures cookies + localStorage, never sessionStorage — can actually
+    // persist and restore a logged-in session across test runs.
+    cacheLocation: "localStorage",
   },
 };
 

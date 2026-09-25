@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
+import SignInButton from "@/components/auth/SignInButton";
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
 
@@ -18,10 +19,14 @@ export default function AppShell({ children }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const signedOut = accounts.length === 0;
   // The signed-out home page is a front door, not a work surface — no
-  // sidebar/navbar chrome around it. Every other route keeps its existing
-  // (ad hoc, per-route) signed-out handling; this is scoped to "/" only.
-  const isSignedOutHome = accounts.length === 0 && pathname === "/";
+  // sidebar/navbar chrome around it.
+  const isSignedOutHome = signedOut && pathname === "/";
+  // Every other route mounts real page content that immediately tries to
+  // fetch data with an access token. Signed out, that has nothing to reach
+  // for, so swap in a sign-in prompt instead of ever mounting the page.
+  const requiresSignIn = signedOut && !isSignedOutHome;
 
   useEffect(() => {
     setCollapsed(localStorage.getItem(STORAGE_KEY) === "true");
@@ -85,7 +90,14 @@ export default function AppShell({ children }: AppShellProps) {
           onNavigate={() => setMenuOpen(false)}
         />
         <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:px-8 md:py-8 lg:px-12 lg:py-10">
-          {children}
+          {requiresSignIn ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 py-24 text-center">
+              <p className="text-sm text-foreground-muted">Sign in to view this page.</p>
+              <SignInButton />
+            </div>
+          ) : (
+            children
+          )}
         </main>
       </div>
     </div>

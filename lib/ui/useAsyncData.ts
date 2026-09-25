@@ -41,11 +41,11 @@ export function useAsyncData<T>(
     let cancelled = false;
 
     (async () => {
-      const accessToken = await getAccessToken();
-      if (cancelled) return;
-      setStatus("loading");
-      setErrorMessage(null);
       try {
+        const accessToken = await getAccessToken();
+        if (cancelled) return;
+        setStatus("loading");
+        setErrorMessage(null);
         const result = await fetcher(accessToken);
         if (cancelled) return;
         setData(result);

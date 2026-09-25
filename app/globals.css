@@ -154,12 +154,21 @@ select {
   line-height: 1.05;
 }
 
-.landing-card {
-  background: oklch(99.7% 0.004 85);
-  border: 1px solid oklch(24% 0.02 50 / 0.08);
-  border-radius: 8px;
-  box-shadow: 0 10px 32px oklch(24% 0.02 50 / 0.06);
-  padding: 2rem 1.75rem 1.85rem;
+.landing-copy {
+  display: grid;
+  grid-template-columns: 1px minmax(0, 1fr);
+  column-gap: 1.25rem;
+}
+
+.landing-copy-follow {
+  padding-left: calc(1px + 1.25rem);
+}
+
+.landing-rule {
+  width: 1px;
+  align-self: stretch;
+  background: var(--color-accent);
+  opacity: 0.4;
 }
 
 .landing-kicker {
@@ -172,31 +181,125 @@ select {
   color: var(--color-foreground-muted);
 }
 
-.landing-points {
-  margin-top: 1.75rem;
+.landing-intro {
+  margin-top: 1.15rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--color-foreground);
 }
 
-.landing-point + .landing-point {
-  margin-top: 0.95rem;
-  padding-top: 0.95rem;
-  border-top: 1px solid oklch(24% 0.02 50 / 0.08);
+.landing-points {
+  margin-top: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.landing-point-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid oklch(24% 0.02 50 / 0.08);
+  border-radius: 4px;
+  transition:
+    transform 160ms cubic-bezier(0.25, 1, 0.5, 1),
+    box-shadow 160ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.landing-point-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 22px oklch(24% 0.02 50 / 0.08);
+}
+
+.landing-point-card-lead {
+  padding: 1.25rem 1.3rem 1.35rem;
+  background: oklch(92% 0.05 152 / 0.32);
+}
+
+.landing-point-card-lead .landing-point-label {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.landing-point-card-lead .landing-point-copy {
+  margin-top: 0.45rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.landing-point-support-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  gap: 0.7rem;
+}
+
+.landing-point-support-row > .landing-enter {
+  min-height: 0;
+  height: 100%;
+}
+
+.landing-point-card-support {
+  height: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+  padding: 1rem 1.05rem 1.1rem;
+  background: oklch(24% 0.02 50 / 0.025);
+}
+
+.landing-point-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.landing-point-card-support .landing-point-label {
+  min-width: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.landing-point-card-support .landing-point-copy {
+  margin-top: 0;
+  min-width: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.landing-point-mark {
+  width: 1.7rem;
+  height: 1.7rem;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+  opacity: 0.5;
+}
+
+.landing-point-mark-lead {
+  width: 2.15rem;
+  height: 2.15rem;
+  opacity: 0.62;
 }
 
 .landing-point-label {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  text-transform: uppercase;
   color: var(--color-foreground);
 }
 
 .landing-point-copy {
-  margin-top: 0.35rem;
-  font-size: 0.875rem;
   font-weight: 400;
-  line-height: 1.55;
   color: var(--color-foreground);
+}
+
+@media (max-width: 639px) {
+  .landing-point-support-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .landing-action {
@@ -219,13 +322,83 @@ select {
 }
 
 @media (min-width: 640px) {
-  .landing-card {
-    padding: 2.5rem 2.25rem 2.35rem;
-  }
-
   .landing-kicker {
     font-size: 0.875rem;
   }
+
+  .landing-intro {
+    font-size: 0.9375rem;
+  }
+}
+
+@keyframes landing-enter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-enter-rule {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.landing-enter {
+  animation: landing-enter-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.landing-enter-echo-1 {
+  animation-delay: 0ms;
+}
+.landing-enter-echo-2 {
+  animation-delay: 100ms;
+}
+.landing-enter-echo-3 {
+  animation-delay: 180ms;
+}
+.landing-enter-echo-4 {
+  animation-delay: 260ms;
+}
+.landing-enter-echo-5 {
+  animation-delay: 340ms;
+}
+
+.landing-enter-mark {
+  animation-duration: 0.68s;
+  animation-delay: 520ms;
+}
+
+.landing-enter-title {
+  animation-duration: 0.42s;
+  animation-delay: 880ms;
+}
+
+.landing-enter-rule {
+  transform-origin: top center;
+  animation: landing-enter-rule 0.42s cubic-bezier(0.16, 1, 0.3, 1) 1080ms both;
+}
+
+.landing-enter-card-lead {
+  animation-duration: 0.4s;
+  animation-delay: 1280ms;
+}
+
+.landing-enter-card-support {
+  animation-duration: 0.4s;
+  animation-delay: 1480ms;
+}
+
+.landing-enter-gate {
+  animation-duration: 0.42s;
+  animation-delay: 1720ms;
 }
 
 /* Real prefers-reduced-motion check: users who ask for reduced motion get a
@@ -241,5 +414,21 @@ select {
 
   .generate-phrase {
     transition: none;
+  }
+
+  .landing-enter,
+  .landing-enter-rule {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .landing-point-card {
+    transition: none;
+  }
+
+  .landing-point-card:hover {
+    transform: none;
+    box-shadow: none;
   }
 }

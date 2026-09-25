@@ -164,7 +164,7 @@ function GeneratingMark() {
   return (
     <Lottie
       key={reduced ? "still" : "play"}
-      src="/animations/loading.json"
+      src="/animations/loading__blob.json"
       autoplay={!reduced}
       loop={!reduced}
       className="size-48 shrink-0"

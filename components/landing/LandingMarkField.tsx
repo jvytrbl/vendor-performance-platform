@@ -27,26 +27,32 @@ export default function LandingMarkField() {
   return (
     <div className="relative flex h-full min-h-[22rem] w-full items-center justify-center overflow-hidden sm:min-h-[28rem]">
       <div className="absolute inset-0" aria-hidden="true">
-        {ECHOES.map((echo) => (
-          <Image
+        {ECHOES.map((echo, index) => (
+          <div
             key={echo.className}
-            src="/vpp_logo.svg"
-            alt=""
-            width={512}
-            height={512}
-            className={echo.className}
-          />
+            className={`absolute inset-0 landing-enter landing-enter-echo-${index + 1}`}
+          >
+            <Image
+              src="/vpp_logo.svg"
+              alt=""
+              width={512}
+              height={512}
+              className={echo.className}
+            />
+          </div>
         ))}
       </div>
 
-      <Image
-        src="/vpp_logo.svg"
-        alt=""
-        width={512}
-        height={512}
-        className="relative z-10 h-[min(46vh,22rem)] w-auto"
-        priority
-      />
+      <div className="relative z-10 landing-enter landing-enter-mark">
+        <Image
+          src="/vpp_logo.svg"
+          alt=""
+          width={512}
+          height={512}
+          className="h-[min(46vh,22rem)] w-auto"
+          priority
+        />
+      </div>
     </div>
   );
 }
