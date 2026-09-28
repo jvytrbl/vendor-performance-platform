@@ -8,10 +8,19 @@ export interface AuthResult {
   reason?: string;
 }
 
-// Entra ID's public verification keys for our tenant — fetched once, reused for every request.
+// Entra ID's public verification keys — the /common/ endpoint serves keys valid for
+// any tenant, since we now accept sign-ins from multiple tenants (our own + Enviros').
+// Which tenant a token actually came from is checked separately via the issuer pattern below.
 const jwks = createRemoteJWKSet(
-  new URL(`https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/discovery/v2.0/keys`)
+  new URL(`https://login.microsoftonline.com/common/discovery/v2.0/keys`)
 );
+
+// Matches a genuine Entra ID v1 issuer for any tenant: https://sts.windows.net/{tenant-guid}/
+// This isn't tenant allow-listing (that's ALLOWED_EMAIL_DOMAIN) — it rejects tokens whose
+// issuer isn't even shaped like a real Microsoft tenant issuer, which jwtVerify's signature
+// check alone wouldn't catch (a token could be correctly signed by the shared /common/ JWKS
+// yet carry a garbage/spoofed `iss` claim).
+const ENTRA_ISSUER_PATTERN = /^https:\/\/sts\.windows\.net\/[0-9a-f-]{36}\/$/;
 
 // Called explicitly by every protected route — this is the authoritative auth check
 // (per Next.js's own guidance: Proxy should only ever do lightweight/optimistic checks,
@@ -32,16 +41,27 @@ export async function validateAuthHeader(
   const token = authorizationHeader.slice("Bearer ".length);
 
   try {
+    // audience stays fixed: regardless of which tenant the user came from, the token
+    // must still have been minted for this specific app registration.
     const { payload } = await jwtVerify(token, jwks, {
-      issuer: `https://sts.windows.net/${process.env.AZURE_TENANT_ID}/`,
       audience: `api://${process.env.AZURE_CLIENT_ID}`,
     });
 
-    const allowedDomain = (process.env.ALLOWED_EMAIL_DOMAIN ?? "").trim().toLowerCase();
+    // issuer is no longer a single hardcoded tenant string — validated by shape instead,
+    // since jose's `issuer` option can't express "any real Entra tenant" as a pattern.
+    if (typeof payload.iss !== "string" || !ENTRA_ISSUER_PATTERN.test(payload.iss)) {
+      return { valid: false, reason: "Invalid or Expired token" };
+    }
 
-    if (!allowedDomain) {
-      // fail closed: if the domain isn't configured, trust nobody
-      return { valid: false, reason: "Access domain not configured" };
+    const allowedDomain = (process.env.ALLOWED_EMAIL_DOMAIN ?? "").trim().toLowerCase();
+    const allowedEmails = (process.env.ALLOWED_EMAILS ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!allowedDomain && allowedEmails.length === 0) {
+      // fail closed: if neither allow-list is configured, trust nobody
+      return { valid: false, reason: "Access not configured" };
     }
 
     const claimedEmail = (
@@ -51,7 +71,12 @@ export async function validateAuthHeader(
       ""
     ).toString().toLowerCase();
 
-    if (!claimedEmail || !claimedEmail.endsWith("@" + allowedDomain)) {
+    // domain match covers the org (e.g. Enviros); explicit list covers individually
+    // approved accounts outside that domain (e.g. the developer's own personal account).
+    const domainOk = Boolean(allowedDomain) && claimedEmail.endsWith("@" + allowedDomain);
+    const explicitOk = allowedEmails.includes(claimedEmail);
+
+    if (!claimedEmail || (!domainOk && !explicitOk)) {
       return { valid: false, reason: "Account not authorized for this application" };
     }
 
