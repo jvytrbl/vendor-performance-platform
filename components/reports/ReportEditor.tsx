@@ -950,7 +950,7 @@ export default function ReportEditor({
                     disabled={busy !== null}
                     onClick={requestGenerate}
                   >
-                    Generate
+                    Re-generate
                   </Button>
                   {readyToFinalize && (
                     <Button
@@ -988,7 +988,7 @@ export default function ReportEditor({
                       disabled={busy !== null}
                       onClick={handleGenerate}
                     >
-                      Generate
+                      Re-generate
                     </Button>
                     <Button
                       type="button"

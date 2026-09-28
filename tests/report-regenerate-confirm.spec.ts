@@ -37,7 +37,7 @@ test('regenerating a report with existing content shows a replace-confirmation, 
   // already have text, so requestGenerate() takes the confirm-first branch
   // instead of silently regenerating (the branch the auto-generate-on-first-
   // arrival path in report-lifecycle.spec.ts never exercises).
-  await page.getByRole('button', { name: /^Generate$/ }).click();
+  await page.getByRole('button', { name: /^Re-generate$/ }).click();
 
   await expect(
     page.getByText(

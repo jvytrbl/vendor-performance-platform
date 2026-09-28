@@ -32,10 +32,29 @@ export async function validateAuthHeader(
   const token = authorizationHeader.slice("Bearer ".length);
 
   try {
-    await jwtVerify(token, jwks, {
+    const { payload } = await jwtVerify(token, jwks, {
       issuer: `https://sts.windows.net/${process.env.AZURE_TENANT_ID}/`,
       audience: `api://${process.env.AZURE_CLIENT_ID}`,
     });
+
+    const allowedDomain = (process.env.ALLOWED_EMAIL_DOMAIN ?? "").trim().toLowerCase();
+
+    if (!allowedDomain) {
+      // fail closed: if the domain isn't configured, trust nobody
+      return { valid: false, reason: "Access domain not configured" };
+    }
+
+    const claimedEmail = (
+      payload.email ??
+      payload.preferred_username ??
+      payload.upn ??
+      ""
+    ).toString().toLowerCase();
+
+    if (!claimedEmail || !claimedEmail.endsWith("@" + allowedDomain)) {
+      return { valid: false, reason: "Account not authorized for this application" };
+    }
+
     return { valid: true };
   } catch (error) {
     console.error("Token verification failed:", error);

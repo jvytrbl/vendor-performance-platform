@@ -17,13 +17,18 @@ loadEnvConfig(process.cwd());
 export default defineConfig({
   testDir: './tests',
   /* Run tests in files in parallel */
-  fullyParallel: true,
+  // These specs mutate one shared live dev server + one shared live Azure SQL
+  // database (real vendors/transactions/reports, real Gemini/PDF calls) — not
+  // isolated per test. Running them in parallel races them against each other
+  // (duplicate-name collisions between specs' test vendors, server/DB overload
+  // pushing real requests past assertion timeouts). One worker trades speed
+  // for a suite that gives the same result every run.
+  fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */

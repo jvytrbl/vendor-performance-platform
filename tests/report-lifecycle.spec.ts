@@ -76,7 +76,7 @@ async function finalizeReport(page: Page, referenceNumber: string, periodStart: 
   // the report is no longer a Draft.
   await expect(page.getByRole('button', { name: /^Edit$/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Delete$/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Generate$/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Re-generate$/ })).toHaveCount(0);
 }
 
 async function exportPdfAndVerifyDownload(page: Page, referenceNumber: string) {

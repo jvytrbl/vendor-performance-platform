@@ -17,18 +17,14 @@ import sql, { ConnectionPool } from "mssql";
 // a SQL connection on every single API call.
 let cachedPool: ConnectionPool | null = null;
 
-/**
- * Returns a ready-to-use SQL connection pool.
- * On first call: authenticates to Key Vault, retrieves the connection
- * string, and opens a new pool.
- * On subsequent calls: returns the already-open pool immediately.
- */
-export async function getDbPool(): Promise<ConnectionPool> {
-  // If we already have a working pool, reuse it - skip everything else
-  if (cachedPool && cachedPool.connected) {
-    return cachedPool;
-  }
+// If two requests call getDbPool() before the first connection attempt has
+// finished, both would otherwise see cachedPool as empty and each kick off
+// their own Key Vault auth + new SQL connection at the same time. Caching the
+// in-flight promise means every concurrent caller awaits the same attempt
+// instead of duplicating it.
+let connectingPool: Promise<ConnectionPool> | null = null;
 
+async function connect(): Promise<ConnectionPool> {
   const tStart = Date.now();
 
   // Step 1: Authenticate to Azure using the Service Principal credentials
@@ -57,8 +53,33 @@ export async function getDbPool(): Promise<ConnectionPool> {
   console.log(`[db-cold-start] SQL pool.connect(): ${Date.now() - tConnect}ms`);
   console.log(`[db-cold-start] total getDbPool(): ${Date.now() - tStart}ms`);
 
-  // Step 4: Cache it for reuse on future calls
-  cachedPool = pool;
+  return pool;
+}
 
-  return cachedPool;
+/**
+ * Returns a ready-to-use SQL connection pool.
+ * On first call: authenticates to Key Vault, retrieves the connection
+ * string, and opens a new pool.
+ * On subsequent calls: returns the already-open pool immediately.
+ * Concurrent calls made before the first connection finishes all share
+ * that same in-flight attempt rather than opening redundant connections.
+ */
+export async function getDbPool(): Promise<ConnectionPool> {
+  // If we already have a working pool, reuse it - skip everything else
+  if (cachedPool && cachedPool.connected) {
+    return cachedPool;
+  }
+
+  if (!connectingPool) {
+    connectingPool = connect()
+      .then((pool) => {
+        cachedPool = pool;
+        return pool;
+      })
+      .finally(() => {
+        connectingPool = null;
+      });
+  }
+
+  return connectingPool;
 }
