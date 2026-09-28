@@ -1,5 +1,10 @@
 import { getDbPool } from "@/lib/db";
 import type { VendorInput } from "@/lib/domain/vendors/validateVendorInput";
+import {
+  buildVendorListOrderBy,
+  type VendorSortBy,
+  type VendorSortOrder,
+} from "@/lib/domain/vendors/vendorListQuery";
 
 export interface VendorRecord {
     id: number;
@@ -12,6 +17,7 @@ export interface VendorDetailRecord {
     registration_number: string;
     contact_info: string;
     created_at: string;
+    transaction_count?: number;
 }
 
 export async function getAllVendors(): Promise<VendorRecord[]> {
@@ -78,6 +84,8 @@ export async function listVendors(page: {
   search?: string;
   limit: number;
   offset: number;
+  sortBy?: VendorSortBy;
+  sortOrder?: VendorSortOrder;
 }): Promise<{ vendors: VendorDetailRecord[]; total: number }> {
   const pool = await getDbPool();
   const request = pool.request();
@@ -85,21 +93,35 @@ export async function listVendors(page: {
   request.input("limit", page.limit);
 
   const search = page.search?.trim();
-  const whereClause = search
+  const countWhere = search
     ? `WHERE (name LIKE @search OR registration_number LIKE @search OR contact_info LIKE @search)`
+    : "";
+  const pageWhere = search
+    ? `WHERE (v.name LIKE @search OR v.registration_number LIKE @search OR v.contact_info LIKE @search)`
     : "";
   if (search) {
     request.input("search", likePattern(search));
   }
 
+  const orderBy = buildVendorListOrderBy({
+    sortBy: page.sortBy,
+    sortOrder: page.sortOrder,
+  });
+
   const countResult = await request.query(
-    `SELECT COUNT(*) AS total FROM VENDORS ${whereClause}`
+    `SELECT COUNT(*) AS total FROM VENDORS ${countWhere}`
   );
   const rowsResult = await request.query(
-    `SELECT id, name, registration_number, contact_info, created_at
-     FROM VENDORS
-     ${whereClause}
-     ORDER BY created_at DESC
+    `SELECT v.id, v.name, v.registration_number, v.contact_info, v.created_at,
+            ISNULL(t.transaction_count, 0) AS transaction_count
+     FROM VENDORS v
+     LEFT JOIN (
+       SELECT vendor_id, COUNT(*) AS transaction_count
+       FROM VENDOR_TRANSACTIONS
+       GROUP BY vendor_id
+     ) t ON t.vendor_id = v.id
+     ${pageWhere}
+     ${orderBy}
      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
   );
 

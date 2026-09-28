@@ -1,7 +1,8 @@
 "use client";
 
-import { PackageSearch } from "lucide-react";
+import { ChevronDown, ChevronUp, PackageSearch } from "lucide-react";
 import type { VendorRecord } from "@/lib/api/vendors";
+import type { VendorSortOrder } from "@/lib/domain/vendors/vendorListQuery";
 import { formatVendorForTable } from "@/lib/ui/vendors/formatVendorForTable";
 import { pageRowNumber } from "@/components/ui/TablePagination";
 import VendorRow from "./VendorRow";
@@ -10,6 +11,9 @@ interface VendorTableProps {
   vendors: VendorRecord[];
   page: number;
   pageSize: number;
+  sortActive: boolean;
+  sortOrder: VendorSortOrder;
+  onSortTransactions: () => void;
   onDelete: (id: number) => void;
   deletingId?: number | null;
   emptyMessage: string;
@@ -19,6 +23,9 @@ export default function VendorTable({
   vendors,
   page,
   pageSize,
+  sortActive,
+  sortOrder,
+  onSortTransactions,
   onDelete,
   deletingId,
   emptyMessage,
@@ -50,6 +57,22 @@ export default function VendorTable({
           </th>
           <th className="px-5 py-3 text-xs font-normal uppercase tracking-wide text-foreground-subtle">
             Contact
+          </th>
+          <th className="px-5 py-3 text-right text-xs font-normal uppercase tracking-wide text-foreground-subtle">
+            <button
+              type="button"
+              onClick={onSortTransactions}
+              className="inline-flex items-center gap-1 uppercase tracking-wide text-foreground-subtle transition-colors duration-150 ease-out hover:text-foreground"
+            >
+              Transactions
+              {sortActive ? (
+                sortOrder === "asc" ? (
+                  <ChevronUp className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                )
+              ) : null}
+            </button>
           </th>
           <th className="px-5 py-3 text-xs font-normal uppercase tracking-wide text-foreground-subtle">
             Added

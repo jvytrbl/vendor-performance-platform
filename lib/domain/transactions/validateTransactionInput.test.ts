@@ -595,6 +595,21 @@ describe("validateTransactionInput", () => {
         });
       });
 
+      it("normalizes an empty-string actual_delivery_date to undefined instead of passing it through", () => {
+        const result = validateTransactionInput({
+          vendor_id: 1,
+          transaction_date: "2026-09-14",
+          item_description: "Steel beams",
+          agreed_price: 100,
+          agreed_delivery_date: "2026-09-20",
+          actual_delivery_date: "",
+          quantity_ordered: 10,
+        } as any);
+
+        expect(result.valid).toBe(true);
+        expect((result as any).data.actual_delivery_date).toBeUndefined();
+      });
+
       it("rejects an actual_delivery_date before the transaction_date", () => {
         const result = validateTransactionInput({
           vendor_id: 1,

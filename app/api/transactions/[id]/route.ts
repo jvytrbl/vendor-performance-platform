@@ -85,8 +85,25 @@ export const PUT = withAuth<{ params: Promise<{ id: string }> }>(async (request,
     );
   }
 
-  const updated = await updateTransaction(transactionId, validation.data);
-  return NextResponse.json({ data: updated });
+  try {
+    const updated = await updateTransaction(transactionId, validation.data);
+    return NextResponse.json({ data: updated });
+  } catch (error: any) {
+    if (error.number === 547) {
+      return NextResponse.json(
+        {
+          error: "Transaction update violates a database constraint (check the delivery dates and prices)",
+          code: "CONSTRAINT_VIOLATION",
+        },
+        { status: 400 }
+      );
+    }
+    console.error("Failed to update transaction", error);
+    return NextResponse.json(
+      { error: "Failed to update transaction", code: "INTERNAL_ERROR" },
+      { status: 500 }
+    );
+  }
 });
 
 export const DELETE = withAuth<{ params: Promise<{ id: string }> }>(async (request, auth, context) => {

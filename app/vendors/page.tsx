@@ -13,11 +13,14 @@ import TablePagination from "@/components/ui/TablePagination";
 import { useAccessToken } from "@/lib/auth/useAccessToken";
 import { useAsyncData } from "@/lib/ui/useAsyncData";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination/parsePageParams";
+import type { VendorSortOrder } from "@/lib/domain/vendors/vendorListQuery";
 import { resolveDeleteFailureMessage } from "@/lib/ui/vendors/resolveDeleteFailureMessage";
 
 export default function VendorsPage() {
   const getAccessToken = useAccessToken();
   const [page, setPage] = useState(1);
+  const [sortByCount, setSortByCount] = useState(false);
+  const [sortOrder, setSortOrder] = useState<VendorSortOrder>("desc");
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -41,8 +44,10 @@ export default function VendorsPage() {
         page,
         pageSize: DEFAULT_PAGE_SIZE,
         search: searchTerm || undefined,
+        sortBy: sortByCount ? "transactionCount" : undefined,
+        sortOrder: sortByCount ? sortOrder : undefined,
       }),
-    [page, searchTerm],
+    [page, searchTerm, sortByCount, sortOrder],
     "Failed to load vendors"
   );
   const vendors = data?.vendors ?? [];
@@ -72,6 +77,16 @@ export default function VendorsPage() {
       setDeletingId(null);
     }
   };
+
+  function handleSortTransactions() {
+    if (!sortByCount) {
+      setSortByCount(true);
+      setSortOrder("desc");
+    } else {
+      setSortOrder((current) => (current === "desc" ? "asc" : "desc"));
+    }
+    setPage(1);
+  }
 
   const emptyMessage =
     searchTerm.trim() === ""
@@ -130,6 +145,9 @@ export default function VendorsPage() {
                 vendors={vendors}
                 page={page}
                 pageSize={DEFAULT_PAGE_SIZE}
+                sortActive={sortByCount}
+                sortOrder={sortOrder}
+                onSortTransactions={handleSortTransactions}
                 onDelete={handleDelete}
                 deletingId={deletingId}
                 emptyMessage={emptyMessage}

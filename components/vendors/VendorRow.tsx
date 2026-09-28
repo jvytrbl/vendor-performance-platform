@@ -26,6 +26,9 @@ export default function VendorRow({ row, index, onDelete, isDeleting }: VendorRo
       <td className="px-5 py-4 text-sm text-foreground-muted">
         {row.contactInfo}
       </td>
+      <td className="px-5 py-4 text-right text-sm tabular-nums text-foreground-muted">
+        {row.transactionCount}
+      </td>
       <td className="px-5 py-4 text-sm tabular-nums text-foreground-muted">
         {row.createdAt}
       </td>

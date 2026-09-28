@@ -70,7 +70,13 @@ describe("GET /api/vendors", () => {
     }));
     const body = await response.json();
 
-    expect(listVendors).toHaveBeenCalledWith({ search: undefined, limit: 15, offset: 0 });
+    expect(listVendors).toHaveBeenCalledWith({
+      search: undefined,
+      limit: 15,
+      offset: 0,
+      sortBy: undefined,
+      sortOrder: "desc",
+    });
     expect(response.status).toBe(200);
     expect(body).toEqual({
       vendors: [{ id: 1, name: "Acme Trading" }],
@@ -86,7 +92,13 @@ describe("GET /api/vendors", () => {
       headers: { Authorization: "Bearer good.token" },
     }));
 
-    expect(listVendors).toHaveBeenCalledWith({ search: "acme", limit: 15, offset: 30 });
+    expect(listVendors).toHaveBeenCalledWith({
+      search: "acme",
+      limit: 15,
+      offset: 30,
+      sortBy: undefined,
+      sortOrder: "desc",
+    });
   });
 
   it("returns an empty page with the total when the requested page is past the last page", async () => {
@@ -98,9 +110,50 @@ describe("GET /api/vendors", () => {
     }));
     const body = await response.json();
 
-    expect(listVendors).toHaveBeenCalledWith({ search: undefined, limit: 15, offset: 45 });
+    expect(listVendors).toHaveBeenCalledWith({
+      search: undefined,
+      limit: 15,
+      offset: 45,
+      sortBy: undefined,
+      sortOrder: "desc",
+    });
     expect(response.status).toBe(200);
     expect(body).toEqual({ vendors: [], total: 31 });
+  });
+
+  it("passes a transaction-count sort into the repository", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(listVendors).mockResolvedValue({ vendors: [], total: 0 } as any);
+
+    await GET(new Request(
+      "http://localhost/api/vendors?sortBy=transactionCount&sortOrder=asc&page=2",
+      { headers: { Authorization: "Bearer good.token" } }
+    ));
+
+    expect(listVendors).toHaveBeenCalledWith({
+      search: undefined,
+      limit: 15,
+      offset: 15,
+      sortBy: "transactionCount",
+      sortOrder: "asc",
+    });
+  });
+
+  it("returns 400 when sortBy is not transactionCount", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+
+    const response = await GET(new Request("http://localhost/api/vendors?sortBy=name", {
+      headers: { Authorization: "Bearer good.token" },
+    }));
+    const body = await response.json();
+
+    expect(listVendors).not.toHaveBeenCalled();
+    expect(response.status).toBe(400);
+    expect(body).toEqual({
+      error: "sortBy must be transactionCount",
+      code: "VALIDATION_FAILED",
+      field: "sortBy",
+    });
   });
 
   it("returns 400 when page is not a positive integer", async () => {

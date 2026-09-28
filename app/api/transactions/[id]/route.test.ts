@@ -233,6 +233,48 @@ describe("PUT /api/transactions/:id", () => {
           data: { id: 5, vendor_id: 1, item_description: "Updated beams" },
         });
       });
+      it("returns 400 with a clean error when the database rejects the update via a CHECK constraint", async () => {
+        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
+        vi.mocked(getFinalizedReports).mockResolvedValue([]);
+        vi.mocked(getVendorById).mockResolvedValue({ id: 1, name: "Acme Trading" } as any);
+        const constraintError: any = new Error(
+          'The UPDATE statement conflicted with the CHECK constraint "CK_VENDOR_TRANSACTIONS_actual_delivery_date".'
+        );
+        constraintError.number = 547;
+        vi.mocked(updateTransaction).mockRejectedValue(constraintError);
+        const request = new Request("http://localhost/api/transactions/5", {
+          method: "PUT",
+          headers: { Authorization: "Bearer good.token" },
+          body: JSON.stringify(validBody),
+        });
+        const response = await PUT(request, { params: Promise.resolve({ id: "5" }) });
+        const body = await response.json();
+        expect(response.status).toBe(400);
+        expect(body).toEqual({
+          error: "Transaction update violates a database constraint (check the delivery dates and prices)",
+          code: "CONSTRAINT_VIOLATION",
+        });
+      });
+      it("returns 500 with a generic error when the database call fails unexpectedly", async () => {
+        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
+        vi.mocked(getFinalizedReports).mockResolvedValue([]);
+        vi.mocked(getVendorById).mockResolvedValue({ id: 1, name: "Acme Trading" } as any);
+        vi.mocked(updateTransaction).mockRejectedValue(new Error("connection reset"));
+        const request = new Request("http://localhost/api/transactions/5", {
+          method: "PUT",
+          headers: { Authorization: "Bearer good.token" },
+          body: JSON.stringify(validBody),
+        });
+        const response = await PUT(request, { params: Promise.resolve({ id: "5" }) });
+        const body = await response.json();
+        expect(response.status).toBe(500);
+        expect(body).toEqual({
+          error: "Failed to update transaction",
+          code: "INTERNAL_ERROR",
+        });
+      });
 });
 
 describe("DELETE /api/transactions/:id", () => {

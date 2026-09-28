@@ -4,6 +4,7 @@ export interface VendorRecord {
     registration_number?: string;
     contact_info?: string;
     created_at?: string;
+    transaction_count?: number;
   }
   
   export interface VendorInput {
@@ -16,6 +17,8 @@ export interface VendorListQuery {
   page?: number;
   pageSize?: number;
   search?: string;
+  sortBy?: "transactionCount";
+  sortOrder?: "asc" | "desc";
 }
 
 export interface VendorPage {
@@ -31,6 +34,8 @@ export async function fetchVendors(
   if (query.page !== undefined) params.set("page", String(query.page));
   if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
   if (query.search) params.set("q", query.search);
+  if (query.sortBy) params.set("sortBy", query.sortBy);
+  if (query.sortOrder) params.set("sortOrder", query.sortOrder);
 
   const search = params.toString();
   const response = await fetch(`/api/vendors${search ? `?${search}` : ""}`, {

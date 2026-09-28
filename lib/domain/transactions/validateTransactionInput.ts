@@ -252,6 +252,14 @@ export function validateTransactionInput(
               field: "actual_delivery_date",
             };
           }
+        } else if ((input.actual_delivery_date as unknown) === "") {
+          // "" means "not yet delivered" (e.g. a stale form default), same as
+          // omitted — but unlike undefined/null it survives `?? null` unchanged,
+          // so the repository would forward the literal string to SQL Server,
+          // which silently converts an empty string to date 1900-01-01 and
+          // trips the CK_VENDOR_TRANSACTIONS_actual_delivery_date >= transaction_date
+          // check. Normalize here so every caller downstream sees "omitted".
+          input.actual_delivery_date = undefined;
         }
 
         return { valid: true, data: input };

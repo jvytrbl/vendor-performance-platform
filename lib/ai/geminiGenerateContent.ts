@@ -1,4 +1,4 @@
-const GEMINI_MODEL = "gemini-3.5-flash";
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 export class RateLimitError extends Error {
   readonly status = 429;

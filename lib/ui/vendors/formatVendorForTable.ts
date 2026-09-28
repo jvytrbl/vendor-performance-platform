@@ -5,6 +5,7 @@ export interface FormattedVendorRow {
   name: string;
   registrationNumber: string;
   contactInfo: string;
+  transactionCount: number;
   createdAt: string;
 }
 
@@ -16,6 +17,7 @@ export function formatVendorForTable(vendor: VendorRecord): FormattedVendorRow {
     name: vendor.name,
     registrationNumber: vendor.registration_number ?? PLACEHOLDER,
     contactInfo: vendor.contact_info ?? PLACEHOLDER,
+    transactionCount: vendor.transaction_count ?? 0,
     createdAt: formatDate(vendor.created_at),
   };
 }

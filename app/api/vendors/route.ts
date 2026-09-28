@@ -4,6 +4,7 @@ import { validateAuthHeader } from "@/lib/auth";
 import { validateVendorInput } from "../../../lib/domain/vendors/validateVendorInput";
 import { findDuplicateVendor } from "../../../lib/domain/vendors/findDuplicateVendor";
 import { getAllVendors, insertVendor, listVendors } from "@/lib/repositories/vendors";
+import { parseVendorListSort } from "@/lib/domain/vendors/vendorListQuery";
 import { parsePageParams } from "../../../lib/pagination/parsePageParams";
 
 
@@ -27,12 +28,24 @@ export async function GET(request: Request) {
         );
     }
     const search = params.get("q")?.trim() || undefined;
+    const sort = parseVendorListSort({
+        sortBy: params.get("sortBy"),
+        sortOrder: params.get("sortOrder"),
+    });
+    if (!sort.ok) {
+        return NextResponse.json(
+            { error: sort.error, code: "VALIDATION_FAILED", field: sort.field },
+            { status: 400 }
+        );
+    }
     
     try {
         const result = await listVendors({
             search,
             limit: page.limit,
             offset: page.offset,
+            sortBy: sort.sortBy,
+            sortOrder: sort.sortOrder,
         });
 
         return NextResponse.json(result);

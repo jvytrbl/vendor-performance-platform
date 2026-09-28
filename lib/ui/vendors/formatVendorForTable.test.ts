@@ -16,6 +16,7 @@ describe("formatVendorForTable", () => {
       name: "Acme Trading",
       registrationNumber: "REG-001",
       contactInfo: "contact@example.com",
+      transactionCount: 0,
       createdAt: "14 Sept 2026",
     });
     });
@@ -40,5 +41,16 @@ describe("formatVendorForTable", () => {
 
         expect(missing.createdAt).toBe("—");
         expect(malformed.createdAt).toBe("—");
+        expect(missing.transactionCount).toBe(0);
+    });
+
+    it("keeps a recorded transaction count", () => {
+        const result = formatVendorForTable({
+            id: 9,
+            name: "Acme Trading",
+            transaction_count: 12,
+        });
+
+        expect(result.transactionCount).toBe(12);
     });
 });
