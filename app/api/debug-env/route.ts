@@ -1,29 +1,23 @@
-// TEMPORARY DIAGNOSTIC ROUTE — delete this file once the ALLOWED_TENANT_IDS
-// localhost-vs-Vercel-production mismatch is understood. Not a feature.
+// TEMPORARY DIAGNOSTIC ROUTE — UNAUTHENTICATED. Delete this file the moment
+// its output has been read. Auth is deliberately removed here because the bug
+// under investigation is validateAuthHeader itself rejecting valid tokens in
+// production, so gating this route behind it would be circular. Only exposes
+// non-secret config flags (no credentials, no user data).
 import { NextResponse } from "next/server";
-import { validateAuthHeader } from "@/lib/auth";
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get("Authorization");
-  const authResult = await validateAuthHeader(authHeader);
-
-  if (!authResult.valid) {
-    return NextResponse.json(
-      { error: authResult.reason, code: "UNAUTHORIZED" },
-      { status: 401 }
-    );
-  }
-
-  const raw = process.env.ALLOWED_TENANT_IDS ?? "";
-  const parsed = raw
+export async function GET() {
+  const tenantIdsRaw = process.env.ALLOWED_TENANT_IDS ?? "";
+  const tenantIdsParsed = tenantIdsRaw
     .split(",")
     .map((t) => t.trim().toLowerCase())
     .filter(Boolean);
 
   return NextResponse.json({
-    allowedTenantIdsRaw: JSON.stringify(raw),
-    allowedTenantIdsRawLength: raw.length,
-    allowedTenantIdsParsed: parsed,
+    allowedTenantIdsRaw: JSON.stringify(tenantIdsRaw),
+    allowedTenantIdsRawLength: tenantIdsRaw.length,
+    allowedTenantIdsParsed: tenantIdsParsed,
+    allowedEmailDomainRaw: JSON.stringify(process.env.ALLOWED_EMAIL_DOMAIN ?? ""),
+    allowedEmailsRaw: JSON.stringify(process.env.ALLOWED_EMAILS ?? ""),
     vercelEnv: process.env.VERCEL_ENV ?? null,
     // This project declares no `export const runtime = "edge"` anywhere,
     // so every API route — including this one — runs on the default
