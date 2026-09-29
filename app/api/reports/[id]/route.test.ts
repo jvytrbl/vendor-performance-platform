@@ -61,7 +61,12 @@ describe("GET /api/reports/:id", () => {
   });
 
   it("returns 400 when the id is not a positive integer", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const request = new Request("http://localhost/api/reports/abc");
     const response = await GET(request, { params: Promise.resolve({ id: "abc" }) });
@@ -77,7 +82,12 @@ describe("GET /api/reports/:id", () => {
   });
 
   it("returns 404 when the report does not exist", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(null);
 
     const request = new Request("http://localhost/api/reports/99");
@@ -93,7 +103,12 @@ describe("GET /api/reports/:id", () => {
   });
 
   it("returns 200 with sections and metrics when found", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(report as any);
 
     const request = new Request("http://localhost/api/reports/7");
@@ -133,7 +148,12 @@ describe("PUT /api/reports/:id", () => {
   });
 
   it("returns 400 when the id is not a positive integer", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const request = new Request("http://localhost/api/reports/abc", {
       method: "PUT",
@@ -153,7 +173,12 @@ describe("PUT /api/reports/:id", () => {
   });
 
   it("returns 400 when a section field is invalid", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const request = new Request("http://localhost/api/reports/7", {
       method: "PUT",
@@ -173,7 +198,12 @@ describe("PUT /api/reports/:id", () => {
   });
 
   it("returns 404 when the report does not exist", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(null);
 
     const request = new Request("http://localhost/api/reports/99", {
@@ -194,7 +224,12 @@ describe("PUT /api/reports/:id", () => {
   });
 
   it("returns 409 when the report is Finalized", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue({
       ...report,
       status: "Finalized",
@@ -218,7 +253,12 @@ describe("PUT /api/reports/:id", () => {
   });
 
   it("updates the sections and returns 200 when the report is Draft", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(report as any);
     vi.mocked(updateReportSections).mockResolvedValue({
       ...report,
@@ -270,7 +310,12 @@ describe("DELETE /api/reports/:id", () => {
     });
   
     it("returns 400 when the id is not a positive integer", async () => {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
   
       const request = new Request("http://localhost/api/reports/abc", {
         method: "DELETE",
@@ -289,7 +334,12 @@ describe("DELETE /api/reports/:id", () => {
     });
   
     it("returns 404 when the report does not exist", async () => {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       vi.mocked(getReportById).mockResolvedValue(null);
   
       const request = new Request("http://localhost/api/reports/99", {
@@ -309,7 +359,12 @@ describe("DELETE /api/reports/:id", () => {
     });
   
     it("returns 409 when the report is Finalized", async () => {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       vi.mocked(getReportById).mockResolvedValue({
         ...report,
         status: "Finalized",
@@ -332,7 +387,12 @@ describe("DELETE /api/reports/:id", () => {
     });
   
     it("deletes the report and returns 200 when it is Draft", async () => {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       vi.mocked(getReportById).mockResolvedValue(report as any);
       vi.mocked(deleteReport).mockResolvedValue(1);
   

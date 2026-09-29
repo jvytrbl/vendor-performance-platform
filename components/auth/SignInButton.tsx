@@ -18,6 +18,7 @@ export default function SignInButton({
     instance
       .loginRedirect({
         scopes: ["api://542c58fb-c9a9-4e98-a11e-da6fea5b1809/access_as_user"],
+        prompt: "select_account",
       })
       .catch((error) => {
         console.error("Login failed", error);
@@ -25,7 +26,14 @@ export default function SignInButton({
   };
 
   const handleSignOut = () => {
-    instance.logoutPopup();
+    instance
+      .logoutPopup({
+        account,
+        postLogoutRedirectUri: window.location.origin,
+      })
+      .catch((error) => {
+        console.error("Logout failed", error);
+      });
   };
 
   if (account) {

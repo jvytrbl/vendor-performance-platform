@@ -61,7 +61,12 @@ describe("POST /api/transactions/bulk-upload", () => {
   });
 
   it("returns 400 when no file is uploaded", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const response = await POST(buildRequest(false));
     const body = await response.json();
@@ -75,7 +80,12 @@ describe("POST /api/transactions/bulk-upload", () => {
   });
 
   it("rejects the whole file when it exceeds the maximum file size, before parsing it", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const oversizedContent = "x".repeat(10 * 1024 * 1024 + 1);
     const formData = new FormData();
@@ -99,7 +109,12 @@ describe("POST /api/transactions/bulk-upload", () => {
   });
 
   it("rejects the whole file when required columns are missing", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(parseTransactionFile).mockResolvedValue({
       headers: ["vendor_name", "item_description"],
       rows: [],
@@ -114,7 +129,12 @@ describe("POST /api/transactions/bulk-upload", () => {
   });
 
   it("rejects the whole file when it exceeds the maximum row count", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(parseTransactionFile).mockResolvedValue({
       headers: Object.keys(validRow),
       rows: new Array(50001).fill(validRow),
@@ -132,7 +152,12 @@ describe("POST /api/transactions/bulk-upload", () => {
   });
 
   it("inserts valid rows, skips format-invalid and vendor-not-found rows individually, and reports both", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(parseTransactionFile).mockResolvedValue({
       headers: Object.keys(validRow),
       rows: [

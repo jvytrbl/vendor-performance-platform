@@ -52,7 +52,12 @@ describe("POST api/transactions", () => {
     });
 
     it("returns 400 with the validation error when the transaction input is invalid", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         const request = new Request("http://localhost/api/transactions", {
           method: "POST",
           headers: { Authorization: "Bearer good.token" },
@@ -68,7 +73,12 @@ describe("POST api/transactions", () => {
         });
       });
       it("returns 404 when the vendor_id does not reference an existing vendor", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getVendorById).mockResolvedValue(null);
         const request = new Request("http://localhost/api/transactions", {
           method: "POST",
@@ -86,7 +96,12 @@ describe("POST api/transactions", () => {
         });
       });
       it("creates the transaction and returns 201 when the vendor exists and input is valid", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getVendorById).mockResolvedValue({
           id: 1,
           name: "Acme Trading",
@@ -132,7 +147,12 @@ describe("GET api/transactions", () => {
         expect(body).toEqual({ error: "Invalid or Expired token", code: "UNAUTHORIZED" });
       });
       it("returns the first page of 15 transactions and the total when no page params are given", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactions).mockResolvedValue({ transactions: [{ id: 1 }], total: 1 } as any);
         const request = new Request("http://localhost/api/transactions", {
           headers: { Authorization: "Bearer good.token" },
@@ -150,7 +170,12 @@ describe("GET api/transactions", () => {
         expect(body).toEqual({ transactions: [{ id: 1 }], total: 1 });
       });
       it("parses vendor_id, date range, and page from query params", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactions).mockResolvedValue({ transactions: [], total: 0 } as any);
         const request = new Request(
           "http://localhost/api/transactions?vendor_id=5&dateFrom=2026-01-01&dateTo=2026-12-31&page=3&pageSize=15",
@@ -166,7 +191,12 @@ describe("GET api/transactions", () => {
         });
       });
       it("returns an empty page with the total when the requested page is past the last page", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactions).mockResolvedValue({ transactions: [], total: 31 } as any);
         const response = await GET(
           new Request("http://localhost/api/transactions?page=4&pageSize=15", {
@@ -178,7 +208,12 @@ describe("GET api/transactions", () => {
         expect(body).toEqual({ transactions: [], total: 31 });
       });
       it("returns 400 when vendor_id is not a positive integer", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         const request = new Request("http://localhost/api/transactions?vendor_id=abc", {
           headers: { Authorization: "Bearer good.token" },
         });
@@ -193,7 +228,12 @@ describe("GET api/transactions", () => {
         });
       });
       it("returns 400 when pageSize is not a positive integer", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         const request = new Request("http://localhost/api/transactions?pageSize=-5", {
           headers: { Authorization: "Bearer good.token" },
         });

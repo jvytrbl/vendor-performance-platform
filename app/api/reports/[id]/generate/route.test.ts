@@ -108,7 +108,12 @@ describe("POST /api/reports/:id/generate", () => {
   });
 
   it("returns 404 when the report does not exist", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(null);
     const response = await POST(
       new Request("http://localhost/api/reports/99/generate", {
@@ -124,7 +129,12 @@ describe("POST /api/reports/:id/generate", () => {
   });
 
   it("returns 409 when the report is Finalized", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue({ ...draft, status: "Finalized" } as any);
     const response = await POST(
       new Request("http://localhost/api/reports/7/generate", {
@@ -140,7 +150,12 @@ describe("POST /api/reports/:id/generate", () => {
   });
 
   it("does not save when the narrative fails validation", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(draft as any);
     vi.mocked(getTransactionsForPeriod).mockResolvedValue([currentTx] as any);
     vi.mocked(geminiGenerateContent).mockResolvedValue("Delay was 9 days.");
@@ -163,7 +178,12 @@ describe("POST /api/reports/:id/generate", () => {
   });
 
   it("saves sections and metrics when generation validates", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
       if (dateFrom === "2026-01-01") return [currentTx] as any;
       return [];
@@ -201,7 +221,12 @@ describe("POST /api/reports/:id/generate", () => {
   });
 
   it("sends each vendor's real name to Gemini, not just its numeric id", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
       if (dateFrom === "2026-01-01") return [currentTx] as any;
       return [];
@@ -230,7 +255,12 @@ describe("POST /api/reports/:id/generate", () => {
   it("retries on 429 and still saves once Gemini succeeds within the retry budget", async () => {
     vi.useFakeTimers();
     try {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
         if (dateFrom === "2026-01-01") return [currentTx] as any;
         return [];
@@ -270,7 +300,12 @@ describe("POST /api/reports/:id/generate", () => {
   it("retries on 503 (Gemini overload) and still saves once Gemini succeeds within the retry budget", async () => {
     vi.useFakeTimers();
     try {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
         if (dateFrom === "2026-01-01") return [currentTx] as any;
         return [];
@@ -310,7 +345,12 @@ describe("POST /api/reports/:id/generate", () => {
   it("returns 503 AI_UNAVAILABLE after exhausting all 3 retry attempts on repeated 429s", async () => {
     vi.useFakeTimers();
     try {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       vi.mocked(getReportById).mockResolvedValue(draft as any);
       vi.mocked(getTransactionsForPeriod).mockResolvedValue([currentTx] as any);
       vi.mocked(geminiGenerateContent).mockRejectedValue(new RateLimitError());
@@ -340,7 +380,12 @@ describe("POST /api/reports/:id/generate", () => {
   // Category 7 (concurrency), NFR-012: a second /generate call for the same
   // report while one is already in progress must be rejected, not queued.
   it("returns 409 GENERATION_IN_PROGRESS when generation is already in progress for this report", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(draft as any);
     vi.mocked(tryStartGeneration).mockResolvedValue(false);
 
@@ -361,7 +406,12 @@ describe("POST /api/reports/:id/generate", () => {
   });
 
   it("releases the generation claim after a successful generation", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getTransactionsForPeriod).mockImplementation(async (_ids, dateFrom) => {
       if (dateFrom === "2026-01-01") return [currentTx] as any;
       return [];
@@ -388,7 +438,12 @@ describe("POST /api/reports/:id/generate", () => {
   });
 
   it("releases the generation claim even when generation fails validation", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(draft as any);
     vi.mocked(getTransactionsForPeriod).mockResolvedValue([currentTx] as any);
     vi.mocked(geminiGenerateContent).mockResolvedValue("Delay was 9 days.");

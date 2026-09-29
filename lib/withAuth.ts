@@ -7,8 +7,13 @@ import { validateAuthHeader, type AuthResult } from "./auth";
 // it's `{ params: Promise<{}> }`. `any` here is a deliberate, narrow accommodation
 // of that real calling convention, not a general escape hatch; dynamic routes still
 // override this with a specific shape, e.g. withAuth<{ params: Promise<{ id: string }> }>.
+// The handler only ever runs after the `!auth.valid` guard below returns early,
+// so it's typed to receive just the verified-identity branch of AuthResult —
+// callers can read auth.email/oid/tid without re-checking auth.valid themselves.
+type VerifiedAuth = Extract<AuthResult, { valid: true }>;
+
 export function withAuth<TContext = any>(
-  handler: (request: Request, auth: AuthResult, context?: TContext) => Promise<Response>
+  handler: (request: Request, auth: VerifiedAuth, context?: TContext) => Promise<Response>
 ) {
   return async (request: Request, context?: TContext): Promise<Response> => {
     const authHeader = request.headers.get("Authorization");

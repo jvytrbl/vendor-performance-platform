@@ -1,12 +1,13 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 // The shape every call to validateAuthHeader returns:
-// - valid: did the request's token check out?
-// - reason: only set when valid is false — a short, specific explanation of why it was rejected
-export interface AuthResult {
-  valid: boolean;
-  reason?: string;
-}
+// - on success: the verified identity (email, oid — Entra's stable per-user object id,
+//   and tid — the token's tenant id), so callers can attribute an action to a user
+//   without re-decoding the token themselves.
+// - on failure: a short, specific reason the token was rejected.
+export type AuthResult =
+  | { valid: true; email: string; oid: string; tid: string }
+  | { valid: false; reason: string };
 
 // Entra ID's public verification keys — the /common/ endpoint serves keys valid for
 // any tenant, since we now accept sign-ins from multiple tenants (our own + Enviros').
@@ -26,12 +27,12 @@ const ENTRA_ISSUER_PATTERN = /^https:\/\/sts\.windows\.net\/[0-9a-f-]{36}\/$/;
 // (per Next.js's own guidance: Proxy should only ever do lightweight/optimistic checks,
 // real verification belongs close to the data, i.e. in the route handler itself).
 // Input: the raw "Authorization" header value from the incoming request (or null if absent).
-// Output: { valid: true } for a genuinely good token, or { valid: false, reason } otherwise.
+// Output: { valid: true, email, oid, tid } for a genuinely good token, or { valid: false, reason } otherwise.
 export async function validateAuthHeader(
   authorizationHeader: string | null
 ): Promise<AuthResult> {
   if (!authorizationHeader) {
-    return { valid: false };
+    return { valid: false, reason: "Missing authorization header" };
   }
 
   if (!authorizationHeader.startsWith("Bearer ")) {
@@ -51,6 +52,30 @@ export async function validateAuthHeader(
     // since jose's `issuer` option can't express "any real Entra tenant" as a pattern.
     if (typeof payload.iss !== "string" || !ENTRA_ISSUER_PATTERN.test(payload.iss)) {
       return { valid: false, reason: "Invalid or Expired token" };
+    }
+
+    if (typeof payload.oid !== "string" || !payload.oid) {
+      return { valid: false, reason: "Invalid or Expired token" };
+    }
+
+    if (typeof payload.tid !== "string" || !payload.tid) {
+      return { valid: false, reason: "Invalid or Expired token" };
+    }
+
+    // Tenants allowed to sign in at all (our own + any explicitly approved partner
+    // tenant, e.g. Enviros' once its GUID is added). This is separate from
+    // ALLOWED_EMAIL_DOMAIN/ALLOWED_EMAILS: the email claim on a token is
+    // self-asserted by the issuing tenant and isn't independently verified by us,
+    // so tid — which Entra ID's own signature backs — is the check that actually
+    // restricts *which tenants* can reach this app at all. Read per-call (like the
+    // email allow-lists below), not cached at module load, so env changes take effect.
+    const allowedTenantIds = (process.env.ALLOWED_TENANT_IDS ?? "")
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!allowedTenantIds.includes(payload.tid.toLowerCase())) {
+      return { valid: false, reason: "Tenant not authorized for this application" };
     }
 
     const allowedDomain = (process.env.ALLOWED_EMAIL_DOMAIN ?? "").trim().toLowerCase();
@@ -80,7 +105,7 @@ export async function validateAuthHeader(
       return { valid: false, reason: "Account not authorized for this application" };
     }
 
-    return { valid: true };
+    return { valid: true, email: claimedEmail, oid: payload.oid, tid: payload.tid };
   } catch (error) {
     console.error("Token verification failed:", error);
     return { valid: false, reason: "Invalid or Expired token" };

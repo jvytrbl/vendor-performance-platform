@@ -21,7 +21,12 @@ describe("GET /api/vendors", () => {
   });
 
   it("returns a 500 response with a generic error message when the database call fails", async() => {
-    vi.mocked(validateAuthHeader).mockResolvedValue( { valid: true});
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(listVendors).mockRejectedValue( new Error("Database connection failed"));
 
     const request = new Request("http://localhost/api/vendors", {
@@ -59,7 +64,12 @@ describe("GET /api/vendors", () => {
   });
 
   it("returns the first page of 15 vendors and the total when no page params are given", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(listVendors).mockResolvedValue({
       vendors: [{ id: 1, name: "Acme Trading" }],
       total: 1,
@@ -85,7 +95,12 @@ describe("GET /api/vendors", () => {
   });
 
   it("passes search and the page slice to the repository", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(listVendors).mockResolvedValue({ vendors: [], total: 31 } as any);
 
     await GET(new Request("http://localhost/api/vendors?page=3&pageSize=15&q=acme", {
@@ -102,7 +117,12 @@ describe("GET /api/vendors", () => {
   });
 
   it("returns an empty page with the total when the requested page is past the last page", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(listVendors).mockResolvedValue({ vendors: [], total: 31 } as any);
 
     const response = await GET(new Request("http://localhost/api/vendors?page=4&pageSize=15", {
@@ -122,7 +142,12 @@ describe("GET /api/vendors", () => {
   });
 
   it("passes a transaction-count sort into the repository", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(listVendors).mockResolvedValue({ vendors: [], total: 0 } as any);
 
     await GET(new Request(
@@ -140,7 +165,12 @@ describe("GET /api/vendors", () => {
   });
 
   it("returns 400 when sortBy is not transactionCount", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const response = await GET(new Request("http://localhost/api/vendors?sortBy=name", {
       headers: { Authorization: "Bearer good.token" },
@@ -157,7 +187,12 @@ describe("GET /api/vendors", () => {
   });
 
   it("returns 400 when page is not a positive integer", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const response = await GET(new Request("http://localhost/api/vendors?page=0", {
       headers: { Authorization: "Bearer good.token" },
@@ -202,7 +237,12 @@ describe("POST /api/vendors", () => {
 
   //testing the validation function from validateVendorInput
   it("returns 400 with the validation error when the vendor input is invalid", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue( { valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const request = new Request("http://localhost/api/vendors", {
       method: "POST",
@@ -227,7 +267,12 @@ describe("POST /api/vendors", () => {
 
   //testing the duplicate function from findDuplicateVendor
   it("returns 409 with the possible duplicate when a similar vendor already exists", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getAllVendors).mockResolvedValue([
       { id: 1, name: "Acme Trading Sdn Bhd" },
     ]);
@@ -251,7 +296,12 @@ describe("POST /api/vendors", () => {
 
   //testing where the POST function create new vendor when validation and duplicate is passed
   it("creates the vendor and returns 201 when no duplicate exists", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getAllVendors).mockResolvedValue([]);
     vi.mocked(insertVendor).mockResolvedValue({ id: 5, name: "Acme Trading" });
   
@@ -273,7 +323,12 @@ describe("POST /api/vendors", () => {
   });
 
   it("returns 409 with a clean message when registration_number already exists", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getAllVendors).mockResolvedValue([]);
     vi.mocked(insertVendor).mockRejectedValue({
       number: 2627,
@@ -302,7 +357,12 @@ describe("POST /api/vendors", () => {
   });
 
   it("creates the vendor even when a possible duplicate exists, if confirmDuplicate is true", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getAllVendors).mockResolvedValue([
       { id: 1, name: "Acme Trading Sdn Bhd" },
     ]);

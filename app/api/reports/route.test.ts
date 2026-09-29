@@ -52,7 +52,12 @@ describe("POST /api/reports", () => {
   });
 
   it("returns 400 with the validation error when the report input is invalid", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const request = new Request("http://localhost/api/reports", {
       method: "POST",
@@ -73,7 +78,12 @@ describe("POST /api/reports", () => {
   });
 
   it("returns 404 when a selected vendor does not exist", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getVendorById).mockResolvedValueOnce({
       id: 1,
       name: "Acme Trading",
@@ -102,7 +112,12 @@ describe("POST /api/reports", () => {
   });
 
   it("creates a Draft report and returns 201 when input is valid and vendors exist", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getVendorById).mockResolvedValue({
       id: 1,
       name: "Acme Trading",
@@ -172,7 +187,12 @@ describe("GET /api/reports", () => {
         });
       });
       it("returns the first page of 15 reports and the total when no page params are given", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(listReports).mockResolvedValue({
           reports: [
             {
@@ -218,7 +238,12 @@ describe("GET /api/reports", () => {
       });
 
       it("returns an empty page with the total when the requested page is past the last page", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(listReports).mockResolvedValue({ reports: [], total: 31 });
         const response = await GET(
           new Request("http://localhost/api/reports?page=4&pageSize=15", {
@@ -239,7 +264,12 @@ describe("GET /api/reports", () => {
       });
 
       it("passes status, search, and sort into the repository query", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(listReports).mockResolvedValue({ reports: [], total: 0 });
         await GET(
           new Request(
@@ -258,7 +288,12 @@ describe("GET /api/reports", () => {
       });
 
       it("returns 400 when status is not Draft or Finalized", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         const response = await GET(
           new Request("http://localhost/api/reports?status=Archived", {
             headers: { Authorization: "Bearer good.token" },
@@ -275,7 +310,12 @@ describe("GET /api/reports", () => {
       });
 
       it("returns 400 when pageSize is not a positive integer", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         const response = await GET(
           new Request("http://localhost/api/reports?pageSize=0", {
             headers: { Authorization: "Bearer good.token" },

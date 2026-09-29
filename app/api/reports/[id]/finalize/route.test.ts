@@ -55,7 +55,12 @@ describe("POST /api/reports/:id/finalize", () => {
   });
 
   it("returns 400 when the id is not a positive integer", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const request = new Request("http://localhost/api/reports/abc/finalize", {
       method: "POST",
@@ -74,7 +79,12 @@ describe("POST /api/reports/:id/finalize", () => {
   });
 
   it("returns 404 when the report does not exist", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(null);
 
     const request = new Request("http://localhost/api/reports/99/finalize", {
@@ -94,7 +104,12 @@ describe("POST /api/reports/:id/finalize", () => {
   });
 
   it("returns 409 when the report is already Finalized", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue({
       ...draft,
       status: "Finalized",
@@ -117,7 +132,12 @@ describe("POST /api/reports/:id/finalize", () => {
   });
 
   it("returns 400 when a section is empty", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue({
       ...draft,
       vendor_summary: "   ",
@@ -145,7 +165,12 @@ describe("POST /api/reports/:id/finalize", () => {
       status: "Finalized",
       finalized_at: "2026-04-02T00:00:00.000Z",
     };
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getReportById).mockResolvedValue(draft as any);
     vi.mocked(finalizeReport).mockResolvedValue(finalized as any);
 

@@ -48,7 +48,12 @@ function requestFor(id: string, format?: string): Request {
 describe("GET /api/reports/:id/export", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
   });
 
   it("returns 401 when the request is not authenticated", async () => {

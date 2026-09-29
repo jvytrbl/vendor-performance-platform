@@ -31,23 +31,29 @@ describe("withAuth", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("calls the handler with the request, auth result, and context when the token is valid", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
-  
+  it("calls the handler with the request, verified identity, and context when the token is valid", async () => {
+    const verifiedAuth = {
+      valid: true as const,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    };
+    vi.mocked(validateAuthHeader).mockResolvedValue(verifiedAuth);
+
     const handlerResponse = new Response(JSON.stringify({ ok: true }), {
       status: 200,
     });
     const handler = vi.fn().mockResolvedValue(handlerResponse);
     const wrapped = withAuth<{ params: Promise<{ id: string }> }>(handler);
-  
+
     const request = new Request("http://localhost/api/transactions/5", {
       headers: { Authorization: "Bearer good.token" },
     });
     const context = { params: Promise.resolve({ id: "5" }) };
-  
+
     const response = await wrapped(request, context);
-  
-    expect(handler).toHaveBeenCalledWith(request, { valid: true }, context);
+
+    expect(handler).toHaveBeenCalledWith(request, verifiedAuth, context);
     expect(response).toBe(handlerResponse);
   });
 

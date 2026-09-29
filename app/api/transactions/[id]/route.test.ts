@@ -59,7 +59,12 @@ describe("GET /api/transactions/:id", () => {
   });
 
   it("returns 400 when the id is not a positive integer", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
 
     const request = new Request("http://localhost/api/transactions/abc");
     const response = await GET(request, { params: Promise.resolve({ id: "abc" }) });
@@ -74,7 +79,12 @@ describe("GET /api/transactions/:id", () => {
   });
 
   it("returns 404 when the transaction does not exist", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getTransactionById).mockResolvedValue(null);
 
     const request = new Request("http://localhost/api/transactions/999");
@@ -90,7 +100,12 @@ describe("GET /api/transactions/:id", () => {
   });
 
   it("returns 200 with the transaction when found", async () => {
-    vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
     vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
 
     const request = new Request("http://localhost/api/transactions/5");
@@ -123,7 +138,12 @@ describe("PUT /api/transactions/:id", () => {
         expect(body).toEqual({ error: "Invalid or Expired token", code: "UNAUTHORIZED" });
       });
       it("returns 400 when the id is not a positive integer", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         const request = new Request("http://localhost/api/transactions/abc", {
           method: "PUT",
           headers: { Authorization: "Bearer good.token" },
@@ -139,7 +159,12 @@ describe("PUT /api/transactions/:id", () => {
         });
       });
       it("returns 400 with the validation error when the input is invalid", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         const request = new Request("http://localhost/api/transactions/5", {
           method: "PUT",
           headers: { Authorization: "Bearer good.token" },
@@ -155,7 +180,12 @@ describe("PUT /api/transactions/:id", () => {
         });
       });
       it("returns 404 when the transaction does not exist", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactionById).mockResolvedValue(null);
         const request = new Request("http://localhost/api/transactions/999", {
           method: "PUT",
@@ -172,7 +202,12 @@ describe("PUT /api/transactions/:id", () => {
         });
       });
       it("returns 409 when the transaction's CURRENT date/vendor is locked by a finalized report, even if the request tries to change the date", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
         vi.mocked(getFinalizedReports).mockResolvedValue([
           { id: 1, reference_number: "RPT-2026-Q2-001", period_start: "2026-06-01", period_end: "2026-06-30", vendor_ids: [1] },
@@ -193,7 +228,12 @@ describe("PUT /api/transactions/:id", () => {
       });
 
       it("returns 404 when the new vendor_id does not reference an existing vendor", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
         vi.mocked(getFinalizedReports).mockResolvedValue([]);
         vi.mocked(getVendorById).mockResolvedValue(null);
@@ -212,7 +252,12 @@ describe("PUT /api/transactions/:id", () => {
         });
       });
       it("updates the transaction and returns 200 when everything checks out", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
         vi.mocked(getFinalizedReports).mockResolvedValue([]);
         vi.mocked(getVendorById).mockResolvedValue({ id: 1, name: "Acme Trading" } as any);
@@ -234,7 +279,12 @@ describe("PUT /api/transactions/:id", () => {
         });
       });
       it("returns 400 with a clean error when the database rejects the update via a CHECK constraint", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
         vi.mocked(getFinalizedReports).mockResolvedValue([]);
         vi.mocked(getVendorById).mockResolvedValue({ id: 1, name: "Acme Trading" } as any);
@@ -257,7 +307,12 @@ describe("PUT /api/transactions/:id", () => {
         });
       });
       it("returns 500 with a generic error when the database call fails unexpectedly", async () => {
-        vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+        vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
         vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
         vi.mocked(getFinalizedReports).mockResolvedValue([]);
         vi.mocked(getVendorById).mockResolvedValue({ id: 1, name: "Acme Trading" } as any);
@@ -296,7 +351,12 @@ describe("DELETE /api/transactions/:id", () => {
       expect(body).toEqual({ error: "Invalid or Expired token", code: "UNAUTHORIZED" });
     });
     it("returns 400 when the id is not a positive integer", async () => {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       const request = new Request("http://localhost/api/transactions/abc", {
         method: "DELETE",
         headers: { Authorization: "Bearer good.token" },
@@ -311,7 +371,12 @@ describe("DELETE /api/transactions/:id", () => {
       });
     });
     it("returns 404 when the transaction does not exist", async () => {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       vi.mocked(getTransactionById).mockResolvedValue(null);
       const request = new Request("http://localhost/api/transactions/999", {
         method: "DELETE",
@@ -327,7 +392,12 @@ describe("DELETE /api/transactions/:id", () => {
       });
     });
     it("returns 409 when the transaction is locked by a finalized report", async () => {
-  vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+  vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
   vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
   vi.mocked(getFinalizedReports).mockResolvedValue([
     { id: 1, reference_number: "RPT-2026-Q2-001", period_start: "2026-06-01", period_end: "2026-06-30", vendor_ids: [1] },
@@ -346,7 +416,12 @@ describe("DELETE /api/transactions/:id", () => {
   });
 });
     it("deletes the transaction and returns 200 when it is not locked", async () => {
-      vi.mocked(validateAuthHeader).mockResolvedValue({ valid: true });
+      vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
       vi.mocked(getTransactionById).mockResolvedValue(existingTransaction as any);
       vi.mocked(getFinalizedReports).mockResolvedValue([]);
       vi.mocked(deleteTransaction).mockResolvedValue(1);
