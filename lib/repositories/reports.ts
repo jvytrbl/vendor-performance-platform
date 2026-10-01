@@ -1,4 +1,4 @@
-import { getDbPool } from "@/lib/db";
+import { getDbPool, type DbExecutor } from "@/lib/db";
 import type { ReportInput } from "@/lib/domain/reports/validateReportInput";
 import { buildReportListQuery, type ReportSortBy, type ReportSortOrder, type ReportStatusFilter } from "../domain/reports/reportListQuery";
 import type { ReportSectionInput } from "../domain/reports/validateReportSections";
@@ -57,8 +57,11 @@ export interface ReportDetailRecord {
   metrics: ReportMetricRecord[];
 }
 
-export async function insertReport(input: ReportInput): Promise<ReportRecord> {
-  const pool = await getDbPool();
+// executor: pass a shared Transaction (e.g. from withAudit) to make this
+// insert part of a larger atomic unit of work; omit it for a standalone
+// call, which falls back to the plain connection pool.
+export async function insertReport(input: ReportInput, executor?: DbExecutor): Promise<ReportRecord> {
+  const pool = executor ?? (await getDbPool());
   const referenceNumber = `VPR-${input.period_start.replaceAll("-", "")}-${Date.now().toString().slice(-6)}`;
 
   const inserted = await pool
@@ -175,9 +178,10 @@ export async function getReportById(id: number): Promise<ReportDetailRecord | nu
 
 export async function updateReportSections(
   id: number,
-  input: ReportSectionInput
+  input: ReportSectionInput,
+  executor?: DbExecutor
 ): Promise<Omit<ReportDetailRecord, "vendor_ids" | "metrics"> | null> {
-  const pool = await getDbPool();
+  const pool = executor ?? (await getDbPool());
   // No OUTPUT clause here: VENDOR_PERFORMANCE_REPORTS has the
   // TR_VPR_finalized_immutable AFTER UPDATE/DELETE trigger (migration 002),
   // and SQL Server forbids OUTPUT-without-INTO on a table with any enabled
@@ -211,8 +215,8 @@ export async function updateReportSections(
   return result.recordset[0] ?? null;
 }
 
-export async function deleteReport(id: number): Promise<number> {
-  const pool = await getDbPool();
+export async function deleteReport(id: number, executor?: DbExecutor): Promise<number> {
+  const pool = executor ?? (await getDbPool());
   const result = await pool 
     .request()
     .input("id", id)
@@ -222,9 +226,10 @@ export async function deleteReport(id: number): Promise<number> {
 }
 
 export async function finalizeReport(
-  id: number
+  id: number,
+  executor?: DbExecutor
 ): Promise<Omit<ReportDetailRecord, "vendor_ids" | "metrics"> | null> {
-  const pool = await getDbPool();
+  const pool = executor ?? (await getDbPool());
   // Same OUTPUT-without-INTO restriction as updateReportSections above
   // (SQL error 334, caused by TR_VPR_finalized_immutable) — plain UPDATE
   // followed by a SELECT instead.
@@ -281,11 +286,16 @@ export async function clearGenerationStatus(id: number): Promise<void> {
 export async function saveGeneratedReport(
   id: number,
   sections: ReportSectionInput,
-  metrics: GeneratedMetricRow[]
+  metrics: GeneratedMetricRow[],
+  executor?: DbExecutor
 ): Promise<void> {
-  await updateReportSections(id, sections);
+  // Forwards executor so the section update and the metrics inserts below
+  // run on the same connection/transaction as each other — otherwise, under
+  // withAudit, this internal call would silently run outside the audited
+  // transaction instead of inside it.
+  await updateReportSections(id, sections, executor);
 
-  const pool = await getDbPool();
+  const pool = executor ?? (await getDbPool());
   for (const row of metrics) {
     await pool
       .request()

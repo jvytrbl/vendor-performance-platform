@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ExportableReport } from "./generateDocxReport";
+import { drawBrandedHeader } from "./pdfBranding";
 
 const PAGE_WIDTH = 595.28; // A4
 const PAGE_HEIGHT = 841.89;
@@ -33,7 +34,11 @@ export async function generatePdfReport(report: ExportableReport): Promise<Buffe
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let y = PAGE_HEIGHT - MARGIN;
+  let y = await drawBrandedHeader(pdfDoc, page, {
+    margin: MARGIN,
+    pageHeight: PAGE_HEIGHT,
+    boldFont,
+  });
 
   function ensureSpace() {
     if (y < MARGIN) {

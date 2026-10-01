@@ -1,4 +1,4 @@
-import { getDbPool } from "@/lib/db";
+import { getDbPool, type DbExecutor } from "@/lib/db";
 import type { VendorInput } from "@/lib/domain/vendors/validateVendorInput";
 import {
   buildVendorListOrderBy,
@@ -27,8 +27,10 @@ export async function getAllVendors(): Promise<VendorRecord[]> {
     return result.recordset;
 }
 
-export async function insertVendor(input: VendorInput): Promise<VendorRecord> {
-    const pool = await getDbPool();
+// executor: pass a shared Transaction (e.g. from withAudit) to make this
+// insert part of a larger atomic unit of work; omit it for a standalone call.
+export async function insertVendor(input: VendorInput, executor?: DbExecutor): Promise<VendorRecord> {
+    const pool = executor ?? (await getDbPool());
     const result = await pool 
         //parameterized query here!
         .request()
@@ -131,8 +133,8 @@ export async function listVendors(page: {
   };
 }
 
-export async function deleteVendor(id: number): Promise<number> {
-    const pool = await getDbPool();
+export async function deleteVendor(id: number, executor?: DbExecutor): Promise<number> {
+    const pool = executor ?? (await getDbPool());
     const result = await pool
         .request()
         .input("id", id)

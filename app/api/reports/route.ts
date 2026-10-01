@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "../../../lib/withAuth";
 import { validateReportInput } from "../../../lib/domain/reports/validateReportInput";
-import { insertReport, listReports } from "@/lib/repositories/reports";
+import { insertReport, listReports, type ReportRecord } from "@/lib/repositories/reports";
 import { getVendorById } from "@/lib/repositories/vendors";
 import { parsePageParams } from "../../../lib/pagination/parsePageParams";
 import { parseReportListFilters } from "../../../lib/domain/reports/reportListQuery";
+import { withAudit } from "@/lib/audit/withAudit";
+import { getClientIp } from "@/lib/http/getClientIp";
 
-export const POST = withAuth(async (request) => {
+export const POST = withAuth(async (request, auth) => {
   const body = await request.json();
   const validation = validateReportInput(body);
 
@@ -27,7 +29,17 @@ export const POST = withAuth(async (request) => {
     }
   }
 
-  const created = await insertReport(validation.data);
+  const created = await withAudit<ReportRecord>(
+    {
+      auth,
+      action: "report.created",
+      targetType: "Report",
+      // The report's id doesn't exist until insertReport's INSERT returns it.
+      targetId: (result) => result.id,
+      ipAddress: getClientIp(request),
+    },
+    (executor) => insertReport(validation.data, executor)
+  );
   return NextResponse.json({ data: created }, { status: 201 });
 });
 

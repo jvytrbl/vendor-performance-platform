@@ -29,6 +29,19 @@ describe("generatePdfReport", () => {
     expect(pdf.getPageCount()).toBeGreaterThan(0);
   });
 
+  // Confirms the Vantage branding retrofit actually took effect — an
+  // embedded JPEG XObject is present in the raw PDF, which only happens if
+  // drawBrandedHeader's embedJpg call ran successfully. Object dictionaries
+  // (unlike content streams) are never Flate-compressed by pdf-lib, so this
+  // is a reliable raw-byte check, not a guess.
+  it("embeds the Vantage logo (branded header) in the output", async () => {
+    const buffer = await generatePdfReport(report);
+    const raw = buffer.toString("latin1");
+
+    expect(raw).toMatch(/\/Subtype\s*\/Image/);
+    expect(raw).toMatch(/\/Filter\s*\/DCTDecode/); // JPEG image filter
+  });
+
   // Category 8 (security-hostile input), SDD §7.2: unbalanced parentheses
   // and backslashes are PDF string-literal syntax — a hand-built content
   // stream that concatenated this raw would produce a corrupt/parseable-

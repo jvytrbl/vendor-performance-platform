@@ -34,6 +34,10 @@ vi.mock("@/lib/repositories/vendors", () => ({
   getVendorsByIds: vi.fn(),
 }));
 
+vi.mock("@/lib/audit/withAudit", () => ({
+  withAudit: vi.fn((_params: unknown, mutate: (executor: unknown) => unknown) => mutate({})),
+}));
+
 vi.mock("../../../../../lib/ai/geminiGenerateContent", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../../../lib/ai/geminiGenerateContent")>();
   return {
@@ -214,7 +218,8 @@ describe("POST /api/reports/:id/generate", () => {
         pricing_analysis: "Agreed and actual prices match.",
         order_accuracy: "Ordered and received quantities match.",
       }),
-      expect.any(Array)
+      expect.any(Array),
+      {}
     );
     expect(response.status).toBe(200);
     expect(body.data.vendor_summary).toBe("On-time delivery was 100.");

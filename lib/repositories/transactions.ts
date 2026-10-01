@@ -1,4 +1,4 @@
-import { getDbPool } from "@/lib/db";
+import { getDbPool, type DbExecutor } from "@/lib/db";
 import type { TransactionInput } from "@/lib/domain/transactions/validateTransactionInput";
 
 export interface TransactionRecord {
@@ -34,10 +34,14 @@ export interface FinalizedReportLock {
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 50;
 
+// executor: pass a shared Transaction (e.g. from withAudit) to make this
+// insert part of a larger atomic unit of work; omit it for a standalone call
+// (the bulk-upload loop deliberately omits it — see that route for why).
 export async function insertTransaction(
-  input: TransactionInput
+  input: TransactionInput,
+  executor?: DbExecutor
 ): Promise<TransactionRecord> {
-  const pool = await getDbPool();
+  const pool = executor ?? (await getDbPool());
   const result = await pool
     .request()
     .input("vendor_id", input.vendor_id)
@@ -159,9 +163,10 @@ export async function getFinalizedReports(): Promise<FinalizedReportLock[]> {
 
 export async function updateTransaction(
   id: number,
-  input: TransactionInput
+  input: TransactionInput,
+  executor?: DbExecutor
 ): Promise<TransactionRecord | null> {
-  const pool = await getDbPool();
+  const pool = executor ?? (await getDbPool());
   const result = await pool
     .request()
     .input("id", id)
@@ -191,8 +196,8 @@ export async function updateTransaction(
   return result.recordset[0] ?? null;
 }
 
-export async function deleteTransaction(id: number): Promise<number> {
-  const pool = await getDbPool();
+export async function deleteTransaction(id: number, executor?: DbExecutor): Promise<number> {
+  const pool = executor ?? (await getDbPool());
   const result = await pool
     .request()
     .input("id", id)

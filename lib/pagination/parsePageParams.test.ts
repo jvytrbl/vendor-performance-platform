@@ -43,4 +43,24 @@ describe("parsePageParams", () => {
       error: `pageSize must be a positive integer up to ${MAX_PAGE_SIZE}`,
     });
   });
+
+  it("uses a caller-supplied defaultPageSize/maxPageSize instead of the app-wide constants", () => {
+    const result = parsePageParams(new URLSearchParams(), {
+      defaultPageSize: 25,
+      maxPageSize: 100,
+    });
+    expect(result).toEqual({ ok: true, page: 1, pageSize: 25, limit: 25, offset: 0 });
+  });
+
+  it("rejects a pageSize above a caller-supplied maxPageSize, not the app-wide one", () => {
+    const result = parsePageParams(new URLSearchParams("pageSize=101"), {
+      defaultPageSize: 25,
+      maxPageSize: 100,
+    });
+    expect(result).toEqual({
+      ok: false,
+      field: "pageSize",
+      error: "pageSize must be a positive integer up to 100",
+    });
+  });
 });

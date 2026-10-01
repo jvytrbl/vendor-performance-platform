@@ -4,6 +4,8 @@ import { validateTransactionInput } from "../../../../lib/domain/transactions/va
 import { isReportLocked } from "../../../../lib/domain/transactions/isReportLocked";
 import { getVendorById } from "@/lib/repositories/vendors";
 import { getTransactionById, getFinalizedReports, updateTransaction, deleteTransaction} from "@/lib/repositories/transactions";
+import { withAudit } from "@/lib/audit/withAudit";
+import { getClientIp } from "@/lib/http/getClientIp";
 
 function parseTransactionId(id: string): number | null {
   const transactionId = Number(id);
@@ -86,7 +88,16 @@ export const PUT = withAuth<{ params: Promise<{ id: string }> }>(async (request,
   }
 
   try {
-    const updated = await updateTransaction(transactionId, validation.data);
+    const updated = await withAudit(
+      {
+        auth,
+        action: "transaction.edited",
+        targetType: "Transaction",
+        targetId: transactionId,
+        ipAddress: getClientIp(request),
+      },
+      (executor) => updateTransaction(transactionId, validation.data, executor)
+    );
     return NextResponse.json({ data: updated });
   } catch (error: any) {
     if (error.number === 547) {
@@ -136,6 +147,15 @@ export const DELETE = withAuth<{ params: Promise<{ id: string }> }>(async (reque
       );
     }
     
-    await deleteTransaction(transactionId);
+    await withAudit(
+      {
+        auth,
+        action: "transaction.deleted",
+        targetType: "Transaction",
+        targetId: transactionId,
+        ipAddress: getClientIp(request),
+      },
+      (executor) => deleteTransaction(transactionId, executor)
+    );
     return NextResponse.json({ ok: true });
   });

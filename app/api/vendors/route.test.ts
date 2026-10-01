@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET, POST  } from "./route";
 import { validateAuthHeader } from "@/lib/auth";
 import { getAllVendors, insertVendor, listVendors } from "@/lib/repositories/vendors";
+import { withAudit } from "@/lib/audit/withAudit";
 import { error } from "console";
 
 vi.mock("@/lib/auth", () => ({
@@ -12,6 +13,10 @@ vi.mock("@/lib/repositories/vendors", () => ({
   getAllVendors: vi.fn(),
   insertVendor: vi.fn(),
   listVendors: vi.fn(),
+}));
+
+vi.mock("@/lib/audit/withAudit", () => ({
+  withAudit: vi.fn((_params: unknown, mutate: (executor: unknown) => unknown) => mutate({})),
 }));
 
 //GET the vendor lists
@@ -320,6 +325,9 @@ describe("POST /api/vendors", () => {
   
     expect(response.status).toBe(201);
     expect(body).toEqual({ data: { id: 5, name: "Acme Trading" } });
+    expect(vi.mocked(withAudit).mock.calls[0][0]).toEqual(
+      expect.objectContaining({ action: "vendor.created", targetType: "Vendor" })
+    );
   });
 
   it("returns 409 with a clean message when registration_number already exists", async () => {

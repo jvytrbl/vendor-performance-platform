@@ -3,6 +3,7 @@ import { POST, GET } from "./route";
 import { validateAuthHeader } from "../../../lib/auth";
 import { insertReport, listReports } from "@/lib/repositories/reports";
 import { getVendorById } from "@/lib/repositories/vendors";
+import { withAudit } from "@/lib/audit/withAudit";
 
 vi.mock("../../../lib/auth", () => ({
   validateAuthHeader: vi.fn(),
@@ -15,6 +16,14 @@ vi.mock("@/lib/repositories/reports", () => ({
 
 vi.mock("@/lib/repositories/vendors", () => ({
   getVendorById: vi.fn(),
+}));
+
+// withAudit normally opens a real DB transaction — routed tests mock it at
+// the same boundary as the repository functions, so it just runs `mutate`
+// with a placeholder executor and returns its result, same as the real
+// implementation would once its result is committed.
+vi.mock("@/lib/audit/withAudit", () => ({
+  withAudit: vi.fn((_params: unknown, mutate: (executor: unknown) => unknown) => mutate({})),
 }));
 
 const validBody = {
@@ -144,13 +153,28 @@ describe("POST /api/reports", () => {
     const response = await POST(request);
     const body = await response.json();
 
-    expect(insertReport).toHaveBeenCalledWith({
-      period_type: "Quarterly",
-      period_start: "2026-01-01",
-      period_end: "2026-03-31",
-      vendor_ids: [1, 2],
-    });
+    expect(insertReport).toHaveBeenCalledWith(
+      {
+        period_type: "Quarterly",
+        period_start: "2026-01-01",
+        period_end: "2026-03-31",
+        vendor_ids: [1, 2],
+      },
+      {}
+    );
     expect(response.status).toBe(201);
+    expect(vi.mocked(withAudit).mock.calls[0][0]).toEqual({
+      auth: {
+        valid: true,
+        email: "test.user@envirosgroup.com",
+        oid: "11111111-1111-1111-1111-111111111111",
+        tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+      },
+      action: "report.created",
+      targetType: "Report",
+      targetId: expect.any(Function),
+      ipAddress: null,
+    });
     expect(body).toEqual({
       data: {
         id: 7,
@@ -161,6 +185,56 @@ describe("POST /api/reports", () => {
         status: "Draft",
         vendor_ids: [1, 2],
       },
+    });
+  });
+
+  it("ignores attacker-supplied identity fields in the request body, using only the verified token identity", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "real.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
+    vi.mocked(getVendorById).mockResolvedValue({
+      id: 1,
+      name: "Acme Trading",
+      registration_number: "REG-001",
+      contact_info: "contact@example.com",
+      created_at: "2026-01-01T00:00:00.000Z",
+    });
+    vi.mocked(insertReport).mockResolvedValue({
+      id: 7,
+      reference_number: "VPR-20260101-123456",
+      period_type: "Quarterly",
+      period_start: "2026-01-01",
+      period_end: "2026-03-31",
+      status: "Draft",
+      vendor_ids: [1, 2],
+    });
+
+    const request = new Request("http://localhost/api/reports", {
+      method: "POST",
+      headers: { Authorization: "Bearer good.token" },
+      body: JSON.stringify({
+        ...validBody,
+        // An attacker-controlled body trying to impersonate someone else or
+        // forge a timestamp — none of this may reach the audit entry.
+        email: "attacker@evil.com",
+        oid: "attacker-oid",
+        userId: "attacker-oid",
+        userEmail: "attacker@evil.com",
+        timestamp: "1999-01-01T00:00:00.000Z",
+      }),
+    });
+
+    await POST(request);
+
+    const auditParams = vi.mocked(withAudit).mock.calls[0][0];
+    expect(auditParams.auth).toEqual({
+      valid: true,
+      email: "real.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
     });
   });
 });

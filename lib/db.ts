@@ -10,7 +10,13 @@ lib/db.ts centralizes that into one function every route can import and call.*/
 
 import { DefaultAzureCredential } from "@azure/identity";
 import { SecretClient } from "@azure/keyvault-secrets";
-import sql, { ConnectionPool } from "mssql";
+import sql, { ConnectionPool, Transaction } from "mssql";
+
+// Anything a repository query can run against: the shared pool for a plain
+// standalone call, or a caller-supplied Transaction when the call needs to
+// participate in someone else's atomic unit of work (e.g. withAudit pairing
+// a mutation with its audit-log row). Both expose the same .request() shape.
+export type DbExecutor = ConnectionPool | Transaction;
 
 // Module-level cache: persists across requests within the same running
 // server instance, so we don't re-authenticate to Key Vault or reopen

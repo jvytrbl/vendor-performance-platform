@@ -16,6 +16,8 @@ import {
   ServiceUnavailableError,
 } from "../../../../../lib/ai/geminiGenerateContent";
 import { withRetry } from "../../../../../lib/ai/withRetry";
+import { withAudit } from "@/lib/audit/withAudit";
+import { getClientIp } from "@/lib/http/getClientIp";
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -49,7 +51,7 @@ function toIsoDate(value: string | Date): string {
 }
 
 export const POST = withAuth<{ params: Promise<{ id: string }> }>(
-  async (_request, _auth, context) => {
+  async (request, auth, context) => {
     const { id } = await context!.params;
     const reportId = parseReportId(id);
 
@@ -141,7 +143,16 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
       }
 
       try {
-        await saveGeneratedReport(reportId, result.sections, result.metrics);
+        await withAudit(
+          {
+            auth,
+            action: "report.generated",
+            targetType: "Report",
+            targetId: reportId,
+            ipAddress: getClientIp(request),
+          },
+          (executor) => saveGeneratedReport(reportId, result.sections, result.metrics, executor)
+        );
       } catch (error: unknown) {
         const sqlNumber =
           typeof error === "object" && error !== null && "number" in error

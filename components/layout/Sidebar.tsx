@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
@@ -9,8 +10,11 @@ import {
   Clock,
   FileText,
   Home,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import { useAccessToken } from "@/lib/auth/useAccessToken";
+import { fetchAuditLog } from "@/lib/api/auditLog";
 
 interface NavItem {
   label: string;
@@ -19,12 +23,19 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const BASE_NAV_ITEMS: NavItem[] = [
   { label: "Home", href: "/", enabled: true, icon: Home },
   { label: "Vendors", href: "/vendors", enabled: true, icon: Building2 },
   { label: "Transactions", href: "/transactions", enabled: true, icon: ArrowLeftRight },
   { label: "Reports", href: "/reports", enabled: true, icon: FileText },
 ];
+
+const AUDIT_LOG_NAV_ITEM: NavItem = {
+  label: "Audit log",
+  href: "/audit-log",
+  enabled: true,
+  icon: ShieldCheck,
+};
 
 interface SidebarProps {
   collapsed: boolean;
@@ -35,7 +46,32 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed, mobileOpen, onToggle, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const getAccessToken = useAccessToken();
   const showLabels = mobileOpen || !collapsed;
+  const [showAuditLogNav, setShowAuditLogNav] = useState(false);
+
+  // Hiding the link is a UI nicety only — /api/audit-log itself re-checks
+  // admin status server-side on every request, which is the real boundary
+  // (a non-admin guessing the URL still gets 403/access-denied). This check
+  // deliberately calls the real endpoint rather than shipping the admin
+  // email allow-list to the client bundle, which would leak who has access.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const accessToken = await getAccessToken();
+        const result = await fetchAuditLog(accessToken, { page: 1, pageSize: 1 });
+        if (!cancelled) setShowAuditLogNav(result.outcome === "ok");
+      } catch {
+        if (!cancelled) setShowAuditLogNav(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getAccessToken]);
+
+  const navItems = showAuditLogNav ? [...BASE_NAV_ITEMS, AUDIT_LOG_NAV_ITEM] : BASE_NAV_ITEMS;
 
   return (
     <aside
@@ -45,7 +81,7 @@ export default function Sidebar({ collapsed, mobileOpen, onToggle, onNavigate }:
       } ${collapsed ? "md:w-14" : "md:w-64"}`}
     >
       <nav className={showLabels ? "flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 pt-4" : "flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 pt-4"}>
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive =
             item.enabled && (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
           const Icon = item.icon;

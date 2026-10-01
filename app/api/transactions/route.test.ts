@@ -3,6 +3,7 @@ import { GET, POST} from "./route";
 import { validateAuthHeader } from "../../../lib/auth";
 import { insertTransaction, getTransactions } from "@/lib/repositories/transactions";
 import { getVendorById } from "@/lib/repositories/vendors";
+import { withAudit } from "@/lib/audit/withAudit";
 
 vi.mock("../../../lib/auth", () => ({
     validateAuthHeader: vi.fn(),
@@ -15,6 +16,10 @@ vi.mock("@/lib/repositories/transactions", () => ({
 
 vi.mock("@/lib/repositories/vendors", () => ({
    getVendorById: vi.fn(),
+}));
+
+vi.mock("@/lib/audit/withAudit", () => ({
+  withAudit: vi.fn((_params: unknown, mutate: (executor: unknown) => unknown) => mutate({})),
 }));
 
 
@@ -125,6 +130,9 @@ describe("POST api/transactions", () => {
         expect(body).toEqual({
           data: { id: 5, vendor_id: 1, item_description: "Steel beams" },
         });
+        expect(vi.mocked(withAudit).mock.calls[0][0]).toEqual(
+          expect.objectContaining({ action: "transaction.created", targetType: "Transaction" })
+        );
       });
 });
 

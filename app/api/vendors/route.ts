@@ -1,24 +1,16 @@
 // GET request :  getting vendors from the database
 import { NextResponse } from "next/server";
-import { validateAuthHeader } from "@/lib/auth";
+import { withAuth } from "@/lib/withAuth";
 import { validateVendorInput } from "../../../lib/domain/vendors/validateVendorInput";
 import { findDuplicateVendor } from "../../../lib/domain/vendors/findDuplicateVendor";
-import { getAllVendors, insertVendor, listVendors } from "@/lib/repositories/vendors";
+import { getAllVendors, insertVendor, listVendors, type VendorRecord } from "@/lib/repositories/vendors";
 import { parseVendorListSort } from "@/lib/domain/vendors/vendorListQuery";
 import { parsePageParams } from "../../../lib/pagination/parsePageParams";
+import { withAudit } from "@/lib/audit/withAudit";
+import { getClientIp } from "@/lib/http/getClientIp";
 
 
-export async function GET(request: Request) {
-    const authHeader = request.headers.get("Authorization");
-    const authResult = await validateAuthHeader(authHeader);
-
-    if(!authResult.valid) {
-        return NextResponse.json(
-            { error: authResult.reason ?? "Unauthorized", code: "UNAUTHORIZED"},
-            { status: 401}
-        );
-    }
-
+export const GET = withAuth(async (request) => {
     const params = new URL(request.url).searchParams;
     const page = parsePageParams(params);
     if (!page.ok) {
@@ -49,25 +41,15 @@ export async function GET(request: Request) {
         });
 
         return NextResponse.json(result);
-    } catch (error: unknown) { 
+    } catch (error: unknown) {
         	return NextResponse.json({
                 error: "Failed to fetch vendors",
                 code: "INTERNAL_ERROR",
             }, { status: 500 });
     }
-}
+});
 
-export async function POST(request: Request) {
-    const authHeader = request.headers.get("Authorization");
-    const authResult = await validateAuthHeader(authHeader);
-
-    if(!authResult.valid) {
-        return NextResponse.json(
-            { error: authResult.reason ?? "Unauthorized", code: "UNAUTHORIZED"},
-            { status: 401},
-        );
-    }
-    
+export const POST = withAuth(async (request, auth) => {
     //do vendor validation check
     const body = await request.json();
     const validation = validateVendorInput(body);
@@ -93,7 +75,16 @@ export async function POST(request: Request) {
 
     //finally, create the vendor and insert into db table VENDOR
     try {
-        const created = await insertVendor(validation.data);
+        const created = await withAudit<VendorRecord>(
+            {
+                auth,
+                action: "vendor.created",
+                targetType: "Vendor",
+                targetId: (result) => result.id,
+                ipAddress: getClientIp(request),
+            },
+            (executor) => insertVendor(validation.data, executor)
+        );
         return NextResponse.json({ data: created }, {status:201});
     } catch (error:any){
         if (error.number === 2627) {
@@ -108,4 +99,4 @@ export async function POST(request: Request) {
         }
         throw  error;
     }
-}
+});

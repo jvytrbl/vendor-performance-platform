@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { withAuth } from "../../../../lib/withAuth";
 import { validateReportSections } from "../../../../lib/domain/reports/validateReportSections";
 import { getReportById, updateReportSections, deleteReport } from "@/lib/repositories/reports";
+import { withAudit } from "@/lib/audit/withAudit";
+import { getClientIp } from "@/lib/http/getClientIp";
 
 function parseReportId(id: string): number | null {
   const reportId = Number(id);
@@ -40,7 +42,7 @@ export const GET = withAuth<{ params: Promise<{ id: string }> }>(
 );
 
 export const PUT = withAuth<{ params: Promise<{ id: string }> }>(
-  async (request, _auth, context) => {
+  async (request, auth, context) => {
     const { id } = await context!.params;
     const reportId = parseReportId(id);
 
@@ -83,13 +85,22 @@ export const PUT = withAuth<{ params: Promise<{ id: string }> }>(
       );
     }
 
-    const updated = await updateReportSections(reportId, validation.data);
+    const updated = await withAudit(
+      {
+        auth,
+        action: "report.edited",
+        targetType: "Report",
+        targetId: reportId,
+        ipAddress: getClientIp(request),
+      },
+      (executor) => updateReportSections(reportId, validation.data, executor)
+    );
     return NextResponse.json({ data: updated });
   }
 );
 
 export const DELETE = withAuth<{ params: Promise<{ id: string }> }>(
-    async (_request, _auth, context) => {
+    async (request, auth, context) => {
       const { id } = await context!.params;
       const reportId = parseReportId(id);
   
@@ -123,7 +134,16 @@ export const DELETE = withAuth<{ params: Promise<{ id: string }> }>(
         );
       }
   
-      await deleteReport(reportId);
+      await withAudit(
+        {
+          auth,
+          action: "report.deleted",
+          targetType: "Report",
+          targetId: reportId,
+          ipAddress: getClientIp(request),
+        },
+        (executor) => deleteReport(reportId, executor)
+      );
       return NextResponse.json({ ok: true });
     }
   );

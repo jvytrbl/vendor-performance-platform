@@ -12,6 +12,10 @@ vi.mock("@/lib/repositories/reports", () => ({
   finalizeReport: vi.fn(),
 }));
 
+vi.mock("@/lib/audit/withAudit", () => ({
+  withAudit: vi.fn((_params: unknown, mutate: (executor: unknown) => unknown) => mutate({})),
+}));
+
 const draft = {
   id: 7,
   reference_number: "VPR-20260101-123456",
@@ -181,7 +185,7 @@ describe("POST /api/reports/:id/finalize", () => {
     const response = await POST(request, { params: Promise.resolve({ id: "7" }) });
     const body = await response.json();
 
-    expect(finalizeReport).toHaveBeenCalledWith(7);
+    expect(finalizeReport).toHaveBeenCalledWith(7, {});
     expect(response.status).toBe(200);
     expect(body).toEqual({ data: finalized });
   });

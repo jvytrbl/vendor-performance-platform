@@ -4,6 +4,7 @@ import { validateAuthHeader } from "../../../../lib/auth";
 import { parseTransactionFile } from "@/lib/uploads/parseTransactionFile";
 import { getAllVendors } from "@/lib/repositories/vendors";
 import { insertTransaction } from "@/lib/repositories/transactions";
+import { logAudit } from "@/lib/audit/logAudit";
 
 vi.mock("../../../../lib/auth", () => ({
   validateAuthHeader: vi.fn(),
@@ -19,6 +20,14 @@ vi.mock("@/lib/repositories/vendors", () => ({
 
 vi.mock("@/lib/repositories/transactions", () => ({
   insertTransaction: vi.fn(),
+}));
+
+vi.mock("@/lib/db", () => ({
+  getDbPool: vi.fn().mockResolvedValue({}),
+}));
+
+vi.mock("@/lib/audit/logAudit", () => ({
+  logAudit: vi.fn().mockResolvedValue(undefined),
 }));
 
 const validRow = {
@@ -45,6 +54,10 @@ function buildRequest(withFile = true) {
 describe("POST /api/transactions/bulk-upload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks() resets calls but not a mockRejectedValue/mockResolvedValue
+    // set by an earlier test — reassert the default here so failure behavior
+    // doesn't leak between tests.
+    vi.mocked(logAudit).mockResolvedValue(undefined);
   });
 
   it("returns 401 when the request is not authenticated", async () => {
@@ -187,5 +200,92 @@ describe("POST /api/transactions/bulk-upload", () => {
         },
       ],
     });
+  });
+
+  it("writes one summary audit row whose targetId is the successful-insert count, not the total attempted", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
+    vi.mocked(parseTransactionFile).mockResolvedValue({
+      headers: Object.keys(validRow),
+      rows: [
+        validRow,
+        { ...validRow, item_description: "" },
+        { ...validRow, vendor_name: "Nonexistent Vendor" },
+      ],
+    });
+    vi.mocked(getAllVendors).mockResolvedValue([{ id: 1, name: "Acme Trading" }]);
+    vi.mocked(insertTransaction).mockResolvedValue({ id: 10, vendor_id: 1, item_description: "Steel beams" });
+
+    await POST(buildRequest());
+
+    expect(logAudit).toHaveBeenCalledTimes(1);
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        action: "transaction.bulk_uploaded",
+        targetType: "Transaction",
+        targetId: 1, // 1 successful insert out of 3 attempted rows — not 3
+        userEmail: "test.user@envirosgroup.com",
+        userOid: "11111111-1111-1111-1111-111111111111",
+        userTid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+      })
+    );
+  });
+
+  it("does not affect the already-inserted transactions or the response when the summary audit write itself fails", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
+    vi.mocked(parseTransactionFile).mockResolvedValue({
+      headers: Object.keys(validRow),
+      rows: [validRow],
+    });
+    vi.mocked(getAllVendors).mockResolvedValue([{ id: 1, name: "Acme Trading" }]);
+    vi.mocked(insertTransaction).mockResolvedValue({ id: 10, vendor_id: 1, item_description: "Steel beams" });
+    vi.mocked(logAudit).mockRejectedValue(new Error("AUDIT_LOG insert failed"));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await POST(buildRequest());
+    const body = await response.json();
+
+    // The row that was already inserted stays inserted — logAudit failing
+    // must not roll it back or otherwise change the reported outcome.
+    expect(insertTransaction).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      data: { inserted: 1, failed: 0 },
+      errors: [],
+    });
+    expect(consoleErrorSpy).toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("still writes a summary row with targetId = 0 when every row in the batch fails", async () => {
+    vi.mocked(validateAuthHeader).mockResolvedValue({
+      valid: true,
+      email: "test.user@envirosgroup.com",
+      oid: "11111111-1111-1111-1111-111111111111",
+      tid: "13c2d626-295d-4ec6-8d56-556d53b94212",
+    });
+    vi.mocked(parseTransactionFile).mockResolvedValue({
+      headers: Object.keys(validRow),
+      rows: [{ ...validRow, item_description: "" }],
+    });
+    vi.mocked(getAllVendors).mockResolvedValue([{ id: 1, name: "Acme Trading" }]);
+
+    await POST(buildRequest());
+
+    expect(logAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ targetId: 0 })
+    );
   });
 });

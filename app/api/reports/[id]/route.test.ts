@@ -13,6 +13,10 @@ vi.mock("@/lib/repositories/reports", () => ({
   deleteReport: vi.fn(),
 }));
 
+vi.mock("@/lib/audit/withAudit", () => ({
+  withAudit: vi.fn((_params: unknown, mutate: (executor: unknown) => unknown) => mutate({})),
+}));
+
 
 const report = {
   id: 7,
@@ -273,7 +277,7 @@ describe("PUT /api/reports/:id", () => {
     const response = await PUT(request, { params: Promise.resolve({ id: "7" }) });
     const body = await response.json();
 
-    expect(updateReportSections).toHaveBeenCalledWith(7, validBody);
+    expect(updateReportSections).toHaveBeenCalledWith(7, validBody, {});
     expect(response.status).toBe(200);
     expect(body).toEqual({
       data: {
@@ -403,7 +407,7 @@ describe("DELETE /api/reports/:id", () => {
       const response = await DELETE(request, { params: Promise.resolve({ id: "7" }) });
       const body = await response.json();
   
-      expect(deleteReport).toHaveBeenCalledWith(7);
+      expect(deleteReport).toHaveBeenCalledWith(7, {});
       expect(response.status).toBe(200);
       expect(body).toEqual({ ok: true });
     });

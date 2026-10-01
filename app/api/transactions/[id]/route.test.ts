@@ -3,6 +3,7 @@ import { GET, PUT, DELETE} from "./route";
 import { validateAuthHeader } from "../../../../lib/auth";
 import { getVendorById } from "@/lib/repositories/vendors";
 import { getTransactionById, getFinalizedReports, updateTransaction, deleteTransaction } from "@/lib/repositories/transactions";
+import { withAudit } from "@/lib/audit/withAudit";
 
 
 vi.mock("../../../../lib/auth", () => ({
@@ -18,6 +19,10 @@ vi.mock("@/lib/repositories/transactions", () => ({
     getFinalizedReports: vi.fn(),
     updateTransaction: vi.fn(),
     deleteTransaction: vi.fn(),
+}));
+
+vi.mock("@/lib/audit/withAudit", () => ({
+  withAudit: vi.fn((_params: unknown, mutate: (executor: unknown) => unknown) => mutate({})),
 }));
 
 const validBody = {
@@ -277,6 +282,9 @@ describe("PUT /api/transactions/:id", () => {
         expect(body).toEqual({
           data: { id: 5, vendor_id: 1, item_description: "Updated beams" },
         });
+        expect(vi.mocked(withAudit).mock.calls[0][0]).toEqual(
+          expect.objectContaining({ action: "transaction.edited", targetType: "Transaction", targetId: 5 })
+        );
       });
       it("returns 400 with a clean error when the database rejects the update via a CHECK constraint", async () => {
         vi.mocked(validateAuthHeader).mockResolvedValue({
@@ -433,5 +441,8 @@ describe("DELETE /api/transactions/:id", () => {
       const body = await response.json();
       expect(response.status).toBe(200);
       expect(body).toEqual({ ok: true });
+      expect(vi.mocked(withAudit).mock.calls[0][0]).toEqual(
+        expect.objectContaining({ action: "transaction.deleted", targetType: "Transaction", targetId: 5 })
+      );
     });
   });

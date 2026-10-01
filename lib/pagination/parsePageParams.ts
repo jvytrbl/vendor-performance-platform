@@ -5,11 +5,15 @@ export type PageParams =
   | { ok: true; page: number; pageSize: number; limit: number; offset: number }
   | { ok: false; field: "page" | "pageSize"; error: string };
 
-function parsePositiveInt(raw: string | null, field: "page" | "pageSize", max?: number): 
+function parsePositiveInt(
+  raw: string | null,
+  field: "page" | "pageSize",
+  fallback: number,
+  max?: number
+):
   | { ok: true; value: number }
   | { ok: false; field: "page" | "pageSize"; error: string } {
   if (raw === null) {
-    const fallback = field === "page" ? 1 : DEFAULT_PAGE_SIZE;
     return { ok: true, value: fallback };
   }
   const parsed = Number(raw);
@@ -25,10 +29,19 @@ function parsePositiveInt(raw: string | null, field: "page" | "pageSize", max?: 
   return { ok: true, value: parsed };
 }
 
-export function parsePageParams(searchParams: URLSearchParams): PageParams {
-  const page = parsePositiveInt(searchParams.get("page"), "page");
+// Every list endpoint shares this parser; defaultPageSize/maxPageSize let a
+// caller override the app-wide DEFAULT_PAGE_SIZE/MAX_PAGE_SIZE (e.g. the
+// audit log's smaller default/max) without duplicating the validation logic.
+export function parsePageParams(
+  searchParams: URLSearchParams,
+  options?: { defaultPageSize?: number; maxPageSize?: number }
+): PageParams {
+  const defaultPageSize = options?.defaultPageSize ?? DEFAULT_PAGE_SIZE;
+  const maxPageSize = options?.maxPageSize ?? MAX_PAGE_SIZE;
+
+  const page = parsePositiveInt(searchParams.get("page"), "page", 1);
   if (!page.ok) return page;
-  const pageSize = parsePositiveInt(searchParams.get("pageSize"), "pageSize", MAX_PAGE_SIZE);
+  const pageSize = parsePositiveInt(searchParams.get("pageSize"), "pageSize", defaultPageSize, maxPageSize);
   if (!pageSize.ok) return pageSize;
   return {
     ok: true,

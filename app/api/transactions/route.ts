@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "../../../lib/withAuth";
 import { validateTransactionInput } from "../../../lib/domain/transactions/validateTransactionInput";
-import { insertTransaction, getTransactions} from "@/lib/repositories/transactions";
+import { insertTransaction, getTransactions, type TransactionRecord } from "@/lib/repositories/transactions";
 import { getVendorById } from "@/lib/repositories/vendors";
 import { parsePageParams } from "../../../lib/pagination/parsePageParams";
+import { withAudit } from "@/lib/audit/withAudit";
+import { getClientIp } from "@/lib/http/getClientIp";
 
 function parseOptionalPositiveInt(raw: string | null): { ok: true; value?: number } | { ok: false } {
     if (raw === null) return { ok: true, value: undefined };
@@ -12,7 +14,7 @@ function parseOptionalPositiveInt(raw: string | null): { ok: true; value?: numbe
     return { ok: true, value: parsed };
 }
   
-export const POST =  withAuth(async (request) => {
+export const POST =  withAuth(async (request, auth) => {
     const body = await request.json();
     const validation = validateTransactionInput(body);
 
@@ -31,7 +33,16 @@ export const POST =  withAuth(async (request) => {
         );
     }
 
-    const created = await insertTransaction(validation.data);
+    const created = await withAudit<TransactionRecord>(
+        {
+            auth,
+            action: "transaction.created",
+            targetType: "Transaction",
+            targetId: (result) => result.id,
+            ipAddress: getClientIp(request),
+        },
+        (executor) => insertTransaction(validation.data, executor)
+    );
     return NextResponse.json({ data: created}, {status: 201});
 })
 

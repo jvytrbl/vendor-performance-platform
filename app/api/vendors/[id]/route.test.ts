@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DELETE, GET } from "./route";
 import { validateAuthHeader } from "../../../../lib/auth";
 import { deleteVendor, getVendorById } from "../../../../lib/repositories/vendors";
+import { withAudit } from "@/lib/audit/withAudit";
 
 vi.mock("../../../../lib/auth", () => ({
   validateAuthHeader: vi.fn(),
@@ -10,6 +11,10 @@ vi.mock("../../../../lib/auth", () => ({
 vi.mock("../../../../lib/repositories/vendors", () => ({
   deleteVendor: vi.fn(),
   getVendorById: vi.fn(),
+}));
+
+vi.mock("@/lib/audit/withAudit", () => ({
+  withAudit: vi.fn((_params: unknown, mutate: (executor: unknown) => unknown) => mutate({})),
 }));
 
 describe("DELETE /api/vendors/:id", () => {
@@ -169,6 +174,9 @@ describe("DELETE /api/vendors/:id", () => {
   
     expect(response.status).toBe(200);
     expect(body).toEqual({ ok: true });
+    expect(vi.mocked(withAudit).mock.calls[0][0]).toEqual(
+      expect.objectContaining({ action: "vendor.deleted", targetType: "Vendor", targetId: 5 })
+    );
   });
 
 });
