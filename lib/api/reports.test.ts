@@ -252,7 +252,7 @@ describe("generateReport", () => {
 });
 
 describe("finalizeReport", () => {
-  it("returns the finalized report on success", async () => {
+  it("returns the finalized report on success, defaulting the acknowledgement to false when omitted", async () => {
     vi.mocked(fetch).mockResolvedValue(
       mockResponse(200, { data: { id: 7, status: "Finalized" } })
     );
@@ -261,11 +261,32 @@ describe("finalizeReport", () => {
 
     expect(fetch).toHaveBeenCalledWith("/api/reports/7/finalize", {
       method: "POST",
-      headers: { Authorization: "Bearer good.token" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer good.token",
+      },
+      body: JSON.stringify({ acknowledgedComparisonReview: false }),
     });
     expect(result).toEqual({
       outcome: "ok",
       report: { id: 7, status: "Finalized" },
+    });
+  });
+
+  it("sends the acknowledgement flag when provided", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      mockResponse(200, { data: { id: 7, status: "Finalized" } })
+    );
+
+    await finalizeReport(7, "good.token", { acknowledgedComparisonReview: true });
+
+    expect(fetch).toHaveBeenCalledWith("/api/reports/7/finalize", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer good.token",
+      },
+      body: JSON.stringify({ acknowledgedComparisonReview: true }),
     });
   });
 });

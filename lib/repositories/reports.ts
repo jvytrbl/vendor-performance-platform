@@ -51,6 +51,12 @@ export interface ReportDetailRecord {
   delivery_performance: string | null;
   pricing_analysis: string | null;
   order_accuracy: string | null;
+  // AI Comparative Analysis — null for reports with fewer than 2 vendors,
+  // and for pre-existing reports from before this feature (no backfill).
+  ai_overall_comparison: string | null;
+  ai_delivery_comparison: string | null;
+  ai_pricing_comparison: string | null;
+  ai_order_accuracy_comparison: string | null;
   created_at: string;
   finalized_at: string | null;
   vendor_ids: number[];
@@ -137,6 +143,8 @@ export async function getReportById(id: number): Promise<ReportDetailRecord | nu
     .query(
       `SELECT id, reference_number, period_type, period_start, period_end, status,
               vendor_summary, delivery_performance, pricing_analysis, order_accuracy,
+              ai_overall_comparison, ai_delivery_comparison, ai_pricing_comparison,
+              ai_order_accuracy_comparison,
               created_at, finalized_at
        FROM VENDOR_PERFORMANCE_REPORTS
        WHERE id = @id`
@@ -186,21 +194,45 @@ export async function updateReportSections(
   // TR_VPR_finalized_immutable AFTER UPDATE/DELETE trigger (migration 002),
   // and SQL Server forbids OUTPUT-without-INTO on a table with any enabled
   // trigger (error 334). Fetch the updated row with a follow-up SELECT instead.
-  await pool
+  const request = pool
     .request()
     .input("id", id)
     .input("vendor_summary", input.vendor_summary)
     .input("delivery_performance", input.delivery_performance)
     .input("pricing_analysis", input.pricing_analysis)
-    .input("order_accuracy", input.order_accuracy)
-    .query(
-      `UPDATE VENDOR_PERFORMANCE_REPORTS
-       SET vendor_summary = @vendor_summary,
-           delivery_performance = @delivery_performance,
-           pricing_analysis = @pricing_analysis,
-           order_accuracy = @order_accuracy
-       WHERE id = @id`
-    );
+    .input("order_accuracy", input.order_accuracy);
+
+  const setClauses = [
+    "vendor_summary = @vendor_summary",
+    "delivery_performance = @delivery_performance",
+    "pricing_analysis = @pricing_analysis",
+    "order_accuracy = @order_accuracy",
+  ];
+
+  // The four AI Comparative Analysis columns are only set when the caller
+  // actually supplies them — generation (saveGeneratedReport) always does,
+  // explicitly passing null for reports with fewer than 2 vendors. Today's
+  // manual-edit path (validateReportSections, unchanged in this step) only
+  // knows about the original four fields, so its calls here leave these
+  // columns untouched rather than silently nulling them out.
+  const comparisonFields = [
+    "ai_overall_comparison",
+    "ai_delivery_comparison",
+    "ai_pricing_comparison",
+    "ai_order_accuracy_comparison",
+  ] as const;
+  for (const field of comparisonFields) {
+    if (field in input) {
+      request.input(field, input[field] ?? null);
+      setClauses.push(`${field} = @${field}`);
+    }
+  }
+
+  await request.query(
+    `UPDATE VENDOR_PERFORMANCE_REPORTS
+     SET ${setClauses.join(", ")}
+     WHERE id = @id`
+  );
 
   const result = await pool
     .request()
@@ -208,6 +240,8 @@ export async function updateReportSections(
     .query(
       `SELECT id, reference_number, period_type, period_start, period_end, status,
               vendor_summary, delivery_performance, pricing_analysis, order_accuracy,
+              ai_overall_comparison, ai_delivery_comparison, ai_pricing_comparison,
+              ai_order_accuracy_comparison,
               created_at, finalized_at
        FROM VENDOR_PERFORMANCE_REPORTS
        WHERE id = @id`
@@ -249,6 +283,8 @@ export async function finalizeReport(
     .query(
       `SELECT id, reference_number, period_type, period_start, period_end, status,
               vendor_summary, delivery_performance, pricing_analysis, order_accuracy,
+              ai_overall_comparison, ai_delivery_comparison, ai_pricing_comparison,
+              ai_order_accuracy_comparison,
               created_at, finalized_at
        FROM VENDOR_PERFORMANCE_REPORTS
        WHERE id = @id`

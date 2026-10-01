@@ -112,6 +112,10 @@ export interface ReportDetail {
   delivery_performance: string | null;
   pricing_analysis: string | null;
   order_accuracy: string | null;
+  ai_overall_comparison: string | null;
+  ai_delivery_comparison: string | null;
+  ai_pricing_comparison: string | null;
+  ai_order_accuracy_comparison: string | null;
   created_at: string;
   finalized_at: string | null;
   vendor_ids: number[];
@@ -173,11 +177,18 @@ export async function generateReport(
 
 export async function finalizeReport(
   id: number,
-  accessToken: string
+  accessToken: string,
+  options?: { acknowledgedComparisonReview?: boolean }
 ): Promise<ReportActionResult> {
   const response = await fetch(`/api/reports/${id}/finalize`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      acknowledgedComparisonReview: options?.acknowledgedComparisonReview ?? false,
+    }),
   });
   const body = await response.json();
   if (response.ok) {

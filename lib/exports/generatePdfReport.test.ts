@@ -13,6 +13,10 @@ const report = {
   delivery_performance: "Delivery performance text.",
   pricing_analysis: "Pricing analysis text.",
   order_accuracy: "Order accuracy text.",
+  ai_overall_comparison: null,
+  ai_delivery_comparison: null,
+  ai_pricing_comparison: null,
+  ai_order_accuracy_comparison: null,
   created_at: "2026-04-01T00:00:00.000Z",
   finalized_at: "2026-04-02T00:00:00.000Z",
   vendor_ids: [1],
@@ -74,6 +78,36 @@ describe("generatePdfReport", () => {
       delivery_performance: longText,
     });
 
+    const pdf = await PDFDocument.load(buffer);
+    expect(pdf.getPageCount()).toBeGreaterThan(1);
+  });
+
+  // PDF content streams are Flate-compressed, so (unlike the DOCX export)
+  // raw-byte substring checks can't confirm specific comparison text made it
+  // in. Page count is the behavioral signal available here: adding ~5
+  // headings and 4 paragraphs of text pushes a short one-page report onto a
+  // second page, while a <2-vendor report with nothing to add stays at one.
+  it("does not add any content for the AI Comparative Analysis section when the report has fewer than 2 vendors", async () => {
+    const buffer = await generatePdfReport(report);
+    const pdf = await PDFDocument.load(buffer);
+    expect(pdf.getPageCount()).toBe(1);
+  });
+
+  it("adds the AI Comparative Analysis section when the report has 2+ vendors and the columns are filled in", async () => {
+    // Long enough that the added section alone forces a second page -
+    // same technique as the "wraps a very long section" test above, needed
+    // here because a few short comparison sentences don't reliably push a
+    // one-page report over the edge on their own.
+    const longComparisonText = "Vendor A outperforms Vendor B overall. ".repeat(200);
+
+    const buffer = await generatePdfReport({
+      ...report,
+      vendor_ids: [1, 2],
+      ai_overall_comparison: longComparisonText,
+      ai_delivery_comparison: "Vendor A has the better delivery record.",
+      ai_pricing_comparison: "Vendor B is cheaper on average.",
+      ai_order_accuracy_comparison: "Both vendors are tied on order accuracy.",
+    });
     const pdf = await PDFDocument.load(buffer);
     expect(pdf.getPageCount()).toBeGreaterThan(1);
   });

@@ -7,7 +7,21 @@ import { useRouter } from "next/navigation";
 import { useMsal } from "@azure/msal-react";
 import { ArrowLeft, Download, Info, Pencil, Save, Trash2 } from "lucide-react";
 import type { ReportSectionInput } from "@/lib/domain/reports/validateReportSections";
-import { validateReportReadyToFinalize } from "@/lib/domain/reports/validateReportReadyToFinalize";
+import {
+  validateReportReadyToFinalize,
+  isLegacyComparisonDraft,
+} from "@/lib/domain/reports/validateReportReadyToFinalize";
+import { AI_COMPARATIVE_ANALYSIS_DISCLAIMER } from "@/lib/domain/reports/aiComparativeAnalysisDisclaimer";
+import {
+  buildCategoryComparisonView,
+  buildOverallComparisonView,
+  CATEGORY_METRIC_COLUMNS,
+  type CategoryTableRow,
+  type OverallTableRow,
+} from "@/lib/domain/reports/buildVendorComparisonView";
+import type { CategoryName, VendorRanking } from "@/lib/domain/reports/rankVendorComparison";
+import { formatVendorRankText } from "@/lib/ui/reports/formatVendorRankText";
+import { formatMetricWithUnit } from "@/lib/ui/reports/formatMetricWithUnit";
 import {
   deleteReport,
   exportReport,
@@ -44,11 +58,45 @@ const Lottie = dynamic(() => import("lottie-react").then((mod) => ({ default: mo
 
 const API_SCOPE = "api://542c58fb-c9a9-4e98-a11e-da6fea5b1809/access_as_user";
 
-const SECTIONS: { key: keyof ReportSectionInput; label: string }[] = [
+// Narrowed to the original four required string fields only — kept
+// deliberately separate from ReportSectionInput's four new optional AI
+// Comparative Analysis fields (lib/domain/reports/validateReportSections.ts),
+// which Stage 3 of the AI Comparative Analysis build adds to this editor.
+// Without this narrowing, `keyof ReportSectionInput` would include those
+// nullable fields too, breaking every `.trim()`/`value=` use below that
+// assumes a plain string.
+type OriginalSectionKey =
+  | "vendor_summary"
+  | "delivery_performance"
+  | "pricing_analysis"
+  | "order_accuracy";
+
+const SECTIONS: { key: OriginalSectionKey; label: string }[] = [
   { key: "vendor_summary", label: "Vendor Summary" },
   { key: "delivery_performance", label: "Delivery Performance" },
   { key: "pricing_analysis", label: "Pricing Analysis" },
   { key: "order_accuracy", label: "Order Accuracy" },
+];
+
+type ComparisonSectionKey =
+  | "ai_overall_comparison"
+  | "ai_delivery_comparison"
+  | "ai_pricing_comparison"
+  | "ai_order_accuracy_comparison";
+
+const COMPARISON_SECTIONS: {
+  key: ComparisonSectionKey;
+  label: string;
+  kind: "overall" | CategoryName;
+}[] = [
+  { key: "ai_overall_comparison", label: "Overall Comparison", kind: "overall" },
+  { key: "ai_delivery_comparison", label: "Delivery Comparison", kind: "delivery" },
+  { key: "ai_pricing_comparison", label: "Pricing Comparison", kind: "pricing" },
+  {
+    key: "ai_order_accuracy_comparison",
+    label: "Order Accuracy Comparison",
+    kind: "orderAccuracy",
+  },
 ];
 
 function emptySections(): ReportSectionInput {
@@ -57,6 +105,10 @@ function emptySections(): ReportSectionInput {
     delivery_performance: "",
     pricing_analysis: "",
     order_accuracy: "",
+    ai_overall_comparison: "",
+    ai_delivery_comparison: "",
+    ai_pricing_comparison: "",
+    ai_order_accuracy_comparison: "",
   };
 }
 
@@ -66,7 +118,31 @@ function sectionsFromReport(report: ReportDetail): ReportSectionInput {
     delivery_performance: report.delivery_performance ?? "",
     pricing_analysis: report.pricing_analysis ?? "",
     order_accuracy: report.order_accuracy ?? "",
+    ai_overall_comparison: report.ai_overall_comparison ?? "",
+    ai_delivery_comparison: report.ai_delivery_comparison ?? "",
+    ai_pricing_comparison: report.ai_pricing_comparison ?? "",
+    ai_order_accuracy_comparison: report.ai_order_accuracy_comparison ?? "",
   };
+}
+
+// The edit-state always carries all eight keys (so the textareas have
+// something to bind to even for a <2-vendor report, where the comparison
+// section is never shown). Sending those four keys as "" on a manual Save
+// would make validateReportSections treat them as real, present values and
+// updateReportSections' conditional SET would then overwrite NULL with ""
+// — permanently breaking isLegacyComparisonDraft's `=== null` check for a
+// report that should stay null forever. Only include them in the outgoing
+// payload when the report actually has the section to edit.
+function sectionsPayloadFor(
+  report: ReportDetail,
+  sections: ReportSectionInput
+): ReportSectionInput {
+  if (report.vendor_ids.length < 2) {
+    const { vendor_summary, delivery_performance, pricing_analysis, order_accuracy } =
+      sections;
+    return { vendor_summary, delivery_performance, pricing_analysis, order_accuracy };
+  }
+  return sections;
 }
 
 function MetricValue({ value, className }: { value: number | null; className?: string }) {
@@ -136,6 +212,216 @@ function NarrativeParagraph({
         segment.emphasize ? <strong key={index}>{segment.text}</strong> : segment.text
       )}
     </p>
+  );
+}
+
+// Shared styling for both comparison-table variants below — same visual
+// language as the existing Metrics table (ReportEditor.tsx's metrics
+// section further down): 4px-corner bordered container, horizontal scroll
+// inside its own wrapper, sticky first column, striped rows. Rank is
+// conveyed as text ("1st", "Tied 2nd", "Not enough data"), never by color
+// alone.
+function ComparisonTableShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto min-w-0 w-full rounded border border-border bg-surface">
+      <table className="w-full border-collapse text-sm">{children}</table>
+    </div>
+  );
+}
+
+function VendorHeaderCell() {
+  return (
+    <th
+      scope="col"
+      className="sticky left-0 z-10 border-r border-border bg-surface-muted px-5 py-3 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted"
+    >
+      Vendor
+    </th>
+  );
+}
+
+function RankCell({ ranking }: { ranking: VendorRanking }) {
+  return (
+    <td className="whitespace-nowrap px-5 py-3 tabular-nums text-foreground">
+      {formatVendorRankText(ranking)}
+    </td>
+  );
+}
+
+function OverallComparisonTable({ rows }: { rows: OverallTableRow[] }) {
+  return (
+    <ComparisonTableShell>
+      <caption className="sr-only">
+        Overall ranking comparison across vendors, with each vendor&apos;s delivery,
+        pricing, and order accuracy category ranks
+      </caption>
+      <thead>
+        <tr className="border-b border-border bg-surface-muted text-left">
+          <VendorHeaderCell />
+          <th scope="col" className="whitespace-nowrap border-l border-border px-5 py-3 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+            Overall rank
+          </th>
+          <th scope="col" className="whitespace-nowrap px-5 py-3 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+            Delivery rank
+          </th>
+          <th scope="col" className="whitespace-nowrap px-5 py-3 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+            Pricing rank
+          </th>
+          <th scope="col" className="whitespace-nowrap px-5 py-3 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+            Order accuracy rank
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr
+            key={row.vendorId}
+            className={`border-b border-border last:border-b-0 ${index % 2 === 1 ? "bg-surface-muted" : "bg-surface"}`}
+          >
+            <th
+              scope="row"
+              className="sticky left-0 z-10 max-w-[16rem] break-words border-r border-border bg-[inherit] px-5 py-3 text-left font-semibold text-foreground"
+            >
+              {row.vendorName}
+            </th>
+            <RankCell ranking={row.overall} />
+            <RankCell ranking={row.categoryRanks.delivery} />
+            <RankCell ranking={row.categoryRanks.pricing} />
+            <RankCell ranking={row.categoryRanks.orderAccuracy} />
+          </tr>
+        ))}
+      </tbody>
+    </ComparisonTableShell>
+  );
+}
+
+const CATEGORY_TABLE_CAPTIONS: Record<CategoryName, string> = {
+  delivery: "Delivery performance comparison across vendors, with on-time delivery and average delay",
+  pricing:
+    "Pricing comparison across vendors, with overcharge figures; undercharge rate is shown for reference only and is not used in the ranking",
+  orderAccuracy:
+    "Order accuracy comparison across vendors, with shortfall and over-delivery figures",
+};
+
+function CategoryComparisonTable({
+  category,
+  rows,
+}: {
+  category: CategoryName;
+  rows: CategoryTableRow[];
+}) {
+  const columns = CATEGORY_METRIC_COLUMNS[category];
+  return (
+    <ComparisonTableShell>
+      <caption className="sr-only">{CATEGORY_TABLE_CAPTIONS[category]}</caption>
+      <thead>
+        <tr className="border-b border-border bg-surface-muted text-left">
+          <VendorHeaderCell />
+          <th scope="col" className="whitespace-nowrap border-l border-border px-5 py-3 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+            Rank
+          </th>
+          {columns.map((column) => (
+            <th
+              key={column.key}
+              scope="col"
+              className="whitespace-nowrap border-l border-border px-5 py-3 text-xs font-medium uppercase tracking-wide text-foreground-muted"
+            >
+              {column.label}
+              {column.unranked && (
+                <span className="block text-[10px] font-normal normal-case tracking-normal text-foreground-subtle">
+                  Not used in ranking
+                </span>
+              )}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr
+            key={row.vendorId}
+            className={`border-b border-border last:border-b-0 ${index % 2 === 1 ? "bg-surface-muted" : "bg-surface"}`}
+          >
+            <th
+              scope="row"
+              className="sticky left-0 z-10 max-w-[16rem] break-words border-r border-border bg-[inherit] px-5 py-3 text-left font-semibold text-foreground"
+            >
+              {row.vendorName}
+            </th>
+            <RankCell ranking={row.rank} />
+            {columns.map((column) => (
+              <td key={column.key} className="whitespace-nowrap px-5 py-3 tabular-nums text-foreground">
+                {formatMetricWithUnit(column.key, row.metrics[column.key] ?? null)}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </ComparisonTableShell>
+  );
+}
+
+// Renders one subsection's body for a known view variant (OverallSubsectionView
+// or CategorySubsectionView) without needing an unsafe cast at the call site —
+// `table` renders that variant's own row type, so TS narrows `view.rows`
+// correctly inside each branch instead of a shared union the caller would
+// otherwise have to assert past.
+function ComparisonSubsectionBody<Row>({
+  view,
+  table,
+  reportVendorNames,
+}: {
+  view:
+    | { mode: "empty" }
+    | { mode: "text-only"; paragraphs: string[] }
+    | { mode: "table"; leadLine: string; commentaryParagraphs: string[]; rows: Row[] };
+  table: (rows: Row[]) => React.ReactNode;
+  reportVendorNames: string[];
+}) {
+  if (view.mode === "empty") {
+    return (
+      <p className="max-w-prose text-base leading-relaxed text-foreground-muted">
+        Not written yet.
+      </p>
+    );
+  }
+
+  if (view.mode === "text-only") {
+    return (
+      <>
+        <p className="text-xs text-foreground-subtle">
+          Showing the saved text as written; it no longer matches the computed
+          ranking, so the comparison table isn&apos;t shown.
+        </p>
+        <div className="flex max-w-prose flex-col gap-5">
+          {view.paragraphs.map((paragraph, paragraphIndex) => (
+            <NarrativeParagraph
+              key={paragraphIndex}
+              text={paragraph}
+              vendorNames={reportVendorNames}
+            />
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <p className="text-xl font-medium leading-snug tracking-tight text-foreground">
+        {view.leadLine}
+      </p>
+      {table(view.rows)}
+      <div className="flex max-w-prose flex-col gap-5">
+        {view.commentaryParagraphs.map((paragraph, paragraphIndex) => (
+          <NarrativeParagraph
+            key={paragraphIndex}
+            text={paragraph}
+            vendorNames={reportVendorNames}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -268,6 +554,7 @@ export default function ReportEditor({
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
   const [confirmingGenerate, setConfirmingGenerate] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [acknowledgedComparisonReview, setAcknowledgedComparisonReview] = useState(false);
   const [vendorNames, setVendorNames] = useState<Map<number, string>>(new Map());
   const appliedEditFlag = useRef(false);
   const confirmRef = useRef<HTMLDivElement>(null);
@@ -332,15 +619,16 @@ export default function ReportEditor({
   const hasAutoGeneratedRef = useRef(false);
 
   async function handleSave() {
-    if (!isDraft || busy) return;
+    if (!isDraft || busy || !report) return;
     setBusy("saving");
     clearReportError();
     try {
       const accessToken = await getAccessToken();
-      const result = await updateReportSections(id, sections, accessToken);
+      const payload = sectionsPayloadFor(report, sections);
+      const result = await updateReportSections(id, payload, accessToken);
       if (result.outcome === "error") {
         if (result.code === "UNAUTHORIZED") {
-          saveDraftFields(id, sections, window.sessionStorage);
+          saveDraftFields(id, payload, window.sessionStorage);
           await instance.loginRedirect({ scopes: [API_SCOPE] });
           return;
         }
@@ -492,13 +780,16 @@ export default function ReportEditor({
     clearReportError();
     try {
       const accessToken = await getAccessToken();
-      const result = await finalizeReport(id, accessToken);
+      const result = await finalizeReport(id, accessToken, {
+        acknowledgedComparisonReview,
+      });
       if (result.outcome === "error") {
         showReportError("other", resolveReportActionFailureMessage(result.code));
         return;
       }
       clearDraftFields(id, window.sessionStorage);
       setConfirmingFinalize(false);
+      setAcknowledgedComparisonReview(false);
       const refreshed = await fetchReport(id, accessToken);
       setReport(refreshed);
       setSections(sectionsFromReport(refreshed));
@@ -562,7 +853,15 @@ export default function ReportEditor({
     );
   }
 
-  const readyToFinalize = validateReportReadyToFinalize(sections).valid;
+  // Uses `report` (the last-loaded/saved record, with real null values for
+  // "never generated"), not the `sections` edit-state — that state always
+  // coerces null to "" for textarea editing, which would make every report
+  // look non-legacy to isLegacyComparisonDraft and incorrectly require the
+  // comparison section on reports that should be exempt. This value is only
+  // ever shown in view mode (not editing), where the two stay in sync.
+  const showComparison = report.vendor_ids.length >= 2;
+  const readyToFinalize = validateReportReadyToFinalize(report, report.vendor_ids.length).valid;
+  const comparisonRequiresAck = showComparison && !isLegacyComparisonDraft(report);
   const periodStart = periodDate(report.period_start);
   const periodEnd = periodDate(report.period_end);
   const reportVendorNames = report.vendor_ids
@@ -741,6 +1040,86 @@ export default function ReportEditor({
                 </section>
               );
             })}
+
+            {showComparison && (
+              <section className="mt-10 flex flex-col gap-4 border-t border-border pt-10">
+                <div>
+                  <h2 className="font-display text-2xl font-medium text-foreground">
+                    AI Comparative Analysis
+                  </h2>
+                  <div className="mt-3 flex items-start gap-3 rounded border border-info/30 bg-info-soft px-4 py-3">
+                    <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-info" />
+                    <p className="text-sm leading-relaxed text-foreground">
+                      {AI_COMPARATIVE_ANALYSIS_DISCLAIMER}
+                    </p>
+                  </div>
+                </div>
+
+                {COMPARISON_SECTIONS.map((section) => {
+                  const text = sections[section.key] ?? "";
+
+                  if (isEditing) {
+                    return (
+                      <div key={section.key} className="flex flex-col gap-4">
+                        <h3 className="font-display text-xl font-medium text-foreground">
+                          {section.label}
+                        </h3>
+                        <textarea
+                          value={text}
+                          disabled={locked}
+                          rows={6}
+                          aria-label={section.label}
+                          onChange={(event) =>
+                            setSections((current) => ({
+                              ...current,
+                              [section.key]: event.target.value,
+                            }))
+                          }
+                          className="max-w-prose rounded border border-border bg-surface px-3 py-2 text-base leading-relaxed text-foreground disabled:opacity-60"
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Uses `report[section.key]` (raw, real null when never
+                  // generated), not the edit-state `text` above — same
+                  // null-vs-"" reasoning as showComparison/readyToFinalize.
+                  const viewInput = {
+                    vendorIds: report.vendor_ids,
+                    vendorNames,
+                    metricsRows: report.metrics ?? [],
+                    storedText: report[section.key],
+                  };
+
+                  return (
+                    <div key={section.key} className="flex flex-col gap-4">
+                      <h3 className="font-display text-xl font-medium text-foreground">
+                        {section.label}
+                      </h3>
+                      {(() => {
+                        const kind = section.kind;
+                        if (kind === "overall") {
+                          return (
+                            <ComparisonSubsectionBody
+                              view={buildOverallComparisonView(viewInput)}
+                              table={(rows) => <OverallComparisonTable rows={rows} />}
+                              reportVendorNames={reportVendorNames}
+                            />
+                          );
+                        }
+                        return (
+                          <ComparisonSubsectionBody
+                            view={buildCategoryComparisonView(kind, viewInput)}
+                            table={(rows) => <CategoryComparisonTable category={kind} rows={rows} />}
+                            reportVendorNames={reportVendorNames}
+                          />
+                        );
+                      })()}
+                    </div>
+                  );
+                })}
+              </section>
+            )}
 
             {isEditing && (
               <div className="flex flex-wrap gap-3">
@@ -979,7 +1358,8 @@ export default function ReportEditor({
                 >
                   <p className="text-sm leading-relaxed text-foreground">
                     Generate again for {report.reference_number}? This replaces Vendor Summary,
-                    Delivery Performance, Pricing Analysis, and Order Accuracy.
+                    Delivery Performance, Pricing Analysis, and Order Accuracy
+                    {showComparison ? ", including the AI Comparative Analysis" : ""}.
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <Button
@@ -1014,11 +1394,25 @@ export default function ReportEditor({
                     Finalize {report.reference_number}? This report covers {periodStart} to{" "}
                     {periodEnd}. After you finalize, it cannot be edited or deleted.
                   </p>
+                  {comparisonRequiresAck && (
+                    <label className="flex items-start gap-2 text-sm leading-relaxed text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={acknowledgedComparisonReview}
+                        disabled={busy !== null}
+                        onChange={(event) =>
+                          setAcknowledgedComparisonReview(event.target.checked)
+                        }
+                        className="mt-0.5"
+                      />
+                      I have reviewed the AI Comparative Analysis
+                    </label>
+                  )}
                   <div className="flex flex-wrap gap-3">
                     <Button
                       type="button"
                       variant="primary"
-                      disabled={busy !== null}
+                      disabled={busy !== null || (comparisonRequiresAck && !acknowledgedComparisonReview)}
                       isLoading={busy === "finalizing"}
                       onClick={handleFinalize}
                     >
@@ -1028,7 +1422,10 @@ export default function ReportEditor({
                       type="button"
                       variant="secondary"
                       disabled={busy !== null}
-                      onClick={() => setConfirmingFinalize(false)}
+                      onClick={() => {
+                        setConfirmingFinalize(false);
+                        setAcknowledgedComparisonReview(false);
+                      }}
                     >
                       Cancel
                     </Button>
@@ -1038,7 +1435,10 @@ export default function ReportEditor({
 
               {!readyToFinalize && !confirmingGenerate && !confirmingFinalize && (
                 <p className="max-w-[65ch] text-sm leading-relaxed text-foreground-muted">
-                  Write all four sections before finalizing. You can export PDF or Word after the report is finalized.
+                  {comparisonRequiresAck
+                    ? "Write all sections, including the AI Comparative Analysis, before finalizing."
+                    : "Write all four sections before finalizing."}{" "}
+                  You can export PDF or Word after the report is finalized.
                 </p>
               )}
               {readyToFinalize && !confirmingFinalize && !confirmingGenerate && (

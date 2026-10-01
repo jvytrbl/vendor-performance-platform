@@ -56,6 +56,36 @@ describe("buildPrompt", () => {
   });
 });
 
+describe("buildPrompt — AI Comparative Analysis", () => {
+  it("is byte-identical to the no-comparison prompt when comparisonData is omitted", () => {
+    expect(buildPrompt(data)).toBe(buildPrompt(data, undefined));
+    expect(buildPrompt(data)).toBe(buildPrompt(data, {}));
+  });
+
+  it("adds the four comparison headings and a second JSON block only when comparisonData is given", () => {
+    const comparisonData = { overall: "placeholder" };
+    const prompt = buildPrompt(data, { comparisonData });
+
+    expect(prompt).toContain("Overall Comparison:");
+    expect(prompt).toContain("Delivery Comparison:");
+    expect(prompt).toContain("Pricing Comparison:");
+    expect(prompt).toContain("Order Accuracy Comparison:");
+    expect(prompt).toContain(
+      "do not state who leads, ranks first, or is tied in your own words"
+    );
+    expect(prompt.endsWith(JSON.stringify(comparisonData))).toBe(true);
+    // The original data JSON must still appear intact, immediately before
+    // the comparison JSON block.
+    expect(prompt).toContain(JSON.stringify(data));
+  });
+
+  it("does not add the comparison instructions for the no-comparison path", () => {
+    const prompt = buildPrompt(data);
+    expect(prompt).not.toContain("Overall Comparison:");
+    expect(prompt).not.toContain("comparisonData");
+  });
+});
+
 describe("generateReportNarrative", () => {
     // Category 8 (security-hostile input): does not apply.
     // Prompt data is numbers and null only, produced by A1–A8 / C1.

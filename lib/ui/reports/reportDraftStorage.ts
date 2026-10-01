@@ -26,6 +26,22 @@ export function saveDraftFields(
     order_accuracy: fields.order_accuracy,
   };
 
+  // The four AI Comparative Analysis fields are only ever present on the
+  // caller's object for a >= 2 vendor report (the editor strips them
+  // otherwise — see sectionsPayloadFor in ReportEditor.tsx), so mirror that
+  // same presence here rather than always writing them (as "" or undefined)
+  // into storage.
+  for (const key of [
+    "ai_overall_comparison",
+    "ai_delivery_comparison",
+    "ai_pricing_comparison",
+    "ai_order_accuracy_comparison",
+  ] as const) {
+    if (key in fields) {
+      onlyEditableFields[key] = fields[key];
+    }
+  }
+
   storage.setItem(storageKey(reportId), JSON.stringify(onlyEditableFields));
 }
 

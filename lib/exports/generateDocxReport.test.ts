@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import JSZip from "jszip";
 import { generateDocxReport } from "./generateDocxReport";
+import { AI_COMPARATIVE_ANALYSIS_DISCLAIMER } from "@/lib/domain/reports/aiComparativeAnalysisDisclaimer";
 
 const report = {
   id: 7,
@@ -13,6 +14,10 @@ const report = {
   delivery_performance: "Delivery performance text.",
   pricing_analysis: "Pricing analysis text.",
   order_accuracy: "Order accuracy text.",
+  ai_overall_comparison: null,
+  ai_delivery_comparison: null,
+  ai_pricing_comparison: null,
+  ai_order_accuracy_comparison: null,
   created_at: "2026-04-01T00:00:00.000Z",
   finalized_at: "2026-04-02T00:00:00.000Z",
   vendor_ids: [1],
@@ -85,5 +90,30 @@ describe("generateDocxReport", () => {
     expect(buffer.subarray(0, 4).toString("hex")).toBe("504b0304");
     const xml = await extractDocumentXml(buffer);
     expect(xml).toContain("Delivery was on time.");
+  });
+
+  it("omits the AI Comparative Analysis section and disclaimer when the report has fewer than 2 vendors", async () => {
+    const buffer = await generateDocxReport(report);
+    const xml = await extractDocumentXml(buffer);
+    expect(xml).not.toContain("AI Comparative Analysis");
+    expect(xml).not.toContain(AI_COMPARATIVE_ANALYSIS_DISCLAIMER);
+  });
+
+  it("includes the AI Comparative Analysis section and disclaimer when the report has 2+ vendors and the columns are filled in", async () => {
+    const buffer = await generateDocxReport({
+      ...report,
+      vendor_ids: [1, 2],
+      ai_overall_comparison: "Vendor A outperforms Vendor B overall.",
+      ai_delivery_comparison: "Vendor A has the better delivery record.",
+      ai_pricing_comparison: "Vendor B is cheaper on average.",
+      ai_order_accuracy_comparison: "Both vendors are tied on order accuracy.",
+    });
+    const xml = await extractDocumentXml(buffer);
+    expect(xml).toContain("AI Comparative Analysis");
+    expect(xml).toContain(AI_COMPARATIVE_ANALYSIS_DISCLAIMER);
+    expect(xml).toContain("Vendor A outperforms Vendor B overall.");
+    expect(xml).toContain("Vendor A has the better delivery record.");
+    expect(xml).toContain("Vendor B is cheaper on average.");
+    expect(xml).toContain("Both vendors are tied on order accuracy.");
   });
 });

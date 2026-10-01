@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ExportableReport } from "./generateDocxReport";
+import { AI_COMPARATIVE_ANALYSIS_DISCLAIMER } from "@/lib/domain/reports/aiComparativeAnalysisDisclaimer";
 import { drawBrandedHeader } from "./pdfBranding";
 
 const PAGE_WIDTH = 595.28; // A4
@@ -76,6 +77,24 @@ export async function generatePdfReport(report: ExportableReport): Promise<Buffe
 
   drawHeading("Order Accuracy");
   drawParagraph(report.order_accuracy ?? "");
+
+  // Reports with fewer than 2 vendors never have this section, by design.
+  if (report.vendor_ids.length >= 2) {
+    drawHeading("AI Comparative Analysis");
+    drawParagraph(AI_COMPARATIVE_ANALYSIS_DISCLAIMER);
+
+    drawHeading("Overall Comparison");
+    drawParagraph(report.ai_overall_comparison ?? "");
+
+    drawHeading("Delivery Comparison");
+    drawParagraph(report.ai_delivery_comparison ?? "");
+
+    drawHeading("Pricing Comparison");
+    drawParagraph(report.ai_pricing_comparison ?? "");
+
+    drawHeading("Order Accuracy Comparison");
+    drawParagraph(report.ai_order_accuracy_comparison ?? "");
+  }
 
   const bytes = await pdfDoc.save();
   return Buffer.from(bytes);

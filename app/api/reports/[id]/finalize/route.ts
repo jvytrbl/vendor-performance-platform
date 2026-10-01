@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "../../../../../lib/withAuth";
-import { validateReportReadyToFinalize } from "../../../../../lib/domain/reports/validateReportReadyToFinalize";
+import {
+  validateReportReadyToFinalize,
+  isLegacyComparisonDraft,
+} from "../../../../../lib/domain/reports/validateReportReadyToFinalize";
 import { getReportById, finalizeReport } from "@/lib/repositories/reports";
 import { withAudit } from "@/lib/audit/withAudit";
 import { getClientIp } from "@/lib/http/getClientIp";
@@ -48,12 +51,33 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
       );
     }
 
-    const validation = validateReportReadyToFinalize(existing);
+    const vendorCount = existing.vendor_ids.length;
+    const validation = validateReportReadyToFinalize(existing, vendorCount);
     if (!validation.valid) {
       return NextResponse.json(
         { error: validation.error, code: validation.code, field: validation.field },
         { status: 400 }
       );
+    }
+
+    // The AI Comparative Analysis section needs an explicit "I have
+    // reviewed this" acknowledgement before finalizing, enforced here, not
+    // just by disabling the client's Finalize button — same reasoning as
+    // every other server-side check in this route. No new column: this is
+    // a one-time gate at finalize time, not something persisted.
+    const comparisonRequiresAck = vendorCount >= 2 && !isLegacyComparisonDraft(existing);
+    if (comparisonRequiresAck) {
+      const body = await request.json().catch(() => ({}));
+      if (body?.acknowledgedComparisonReview !== true) {
+        return NextResponse.json(
+          {
+            error: "You must confirm you have reviewed the AI Comparative Analysis before finalizing",
+            code: "COMPARISON_NOT_ACKNOWLEDGED",
+            field: "acknowledgedComparisonReview",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const finalized = await withAudit(

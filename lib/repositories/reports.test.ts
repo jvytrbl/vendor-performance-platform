@@ -215,6 +215,61 @@ describe("updateReportSections", () => {
     expect(mockRequest.input).toHaveBeenCalledWith("order_accuracy", "Updated accuracy");
     expect(result).toEqual(updatedRow);
   });
+
+  it("does not touch the four AI Comparative Analysis columns when the caller only supplies the original four fields (today's manual-edit path)", async () => {
+    const sections = {
+      vendor_summary: "Updated summary",
+      delivery_performance: "Updated delivery",
+      pricing_analysis: "Updated pricing",
+      order_accuracy: "Updated accuracy",
+    };
+    const mockRequest: any = {};
+    mockRequest.input = vi.fn().mockReturnValue(mockRequest);
+    mockRequest.query = vi.fn().mockResolvedValue({ recordset: [reportRow] });
+    vi.mocked(getDbPool).mockResolvedValue({
+      request: () => mockRequest,
+    } as any);
+
+    await updateReportSections(7, sections);
+
+    const updateSql = mockRequest.query.mock.calls[0][0] as string;
+    expect(updateSql).not.toContain("ai_overall_comparison");
+    expect(updateSql).not.toContain("ai_delivery_comparison");
+    expect(updateSql).not.toContain("ai_pricing_comparison");
+    expect(updateSql).not.toContain("ai_order_accuracy_comparison");
+    expect(mockRequest.input).not.toHaveBeenCalledWith("ai_overall_comparison", expect.anything());
+  });
+
+  it("writes the four AI Comparative Analysis columns, including explicit null, when the caller supplies them (generation path)", async () => {
+    const sections = {
+      vendor_summary: "Updated summary",
+      delivery_performance: "Updated delivery",
+      pricing_analysis: "Updated pricing",
+      order_accuracy: "Updated accuracy",
+      ai_overall_comparison: "Acme leads overall.",
+      ai_delivery_comparison: null,
+      ai_pricing_comparison: "Pricing commentary.",
+      ai_order_accuracy_comparison: null,
+    };
+    const mockRequest: any = {};
+    mockRequest.input = vi.fn().mockReturnValue(mockRequest);
+    mockRequest.query = vi.fn().mockResolvedValue({ recordset: [reportRow] });
+    vi.mocked(getDbPool).mockResolvedValue({
+      request: () => mockRequest,
+    } as any);
+
+    await updateReportSections(7, sections);
+
+    const updateSql = mockRequest.query.mock.calls[0][0] as string;
+    expect(updateSql).toContain("ai_overall_comparison = @ai_overall_comparison");
+    expect(updateSql).toContain("ai_delivery_comparison = @ai_delivery_comparison");
+    expect(updateSql).toContain("ai_pricing_comparison = @ai_pricing_comparison");
+    expect(updateSql).toContain("ai_order_accuracy_comparison = @ai_order_accuracy_comparison");
+    expect(mockRequest.input).toHaveBeenCalledWith("ai_overall_comparison", "Acme leads overall.");
+    expect(mockRequest.input).toHaveBeenCalledWith("ai_delivery_comparison", null);
+    expect(mockRequest.input).toHaveBeenCalledWith("ai_pricing_comparison", "Pricing commentary.");
+    expect(mockRequest.input).toHaveBeenCalledWith("ai_order_accuracy_comparison", null);
+  });
 });
 
 describe("deleteReport", () => {

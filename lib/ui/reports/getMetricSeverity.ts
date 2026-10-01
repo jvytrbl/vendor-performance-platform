@@ -42,6 +42,17 @@ const BANDS: Record<ColoredMetricKey, Band> = {
  * given a good/bad judgment the product doesn't make. Undefined values
  * (no eligible transactions) are always "neutral" regardless of metric.
  */
+/**
+ * A metric's ranking direction, for anything that needs to order vendors by
+ * a metric (e.g. the AI Comparative Analysis ranking) without re-encoding
+ * BANDS' directions a second time. `ColoredMetricKey` already excludes
+ * undercharge_rate, so passing it is a compile error, not a runtime case to
+ * handle — it has no direction by design (see the doc comment above).
+ */
+export function getMetricDirection(metric: ColoredMetricKey): "higher-better" | "lower-better" {
+  return BANDS[metric].direction;
+}
+
 export function getMetricSeverity(metric: MetricKey, value: number | null): MetricSeverity {
   if (value === null || metric === "undercharge_rate") {
     return "neutral";

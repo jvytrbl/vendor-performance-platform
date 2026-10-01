@@ -7,6 +7,9 @@ import { computeVendorPeriodMetrics } from "./computeVendorPeriodMetrics";
 import { parseNarrativeSections } from "./parseNarrativeSections";
 import { validateNarrativeNumbers } from "./validateNarrativeNumbers";
 import { validateNarrativeComparisons } from "./validateNarrativeComparisons";
+import { rankVendorComparison } from "./rankVendorComparison";
+import { formatVendorComparisonSummaries } from "./formatVendorComparisonSummary";
+import { validateVendorComparisonNarrative } from "./validateVendorComparisonNarrative";
 
 const MAX_NARRATIVE_ATTEMPTS = 3;
 
@@ -113,17 +116,31 @@ export async function runReportGeneration(input: {
     ),
   ];
 
+  // The AI Comparative Analysis section only exists for reports with >= 2
+  // vendors — for exactly 1 vendor, `comparison` stays null and every
+  // downstream step (prompt, parsing, the four new output fields) is
+  // skipped entirely, leaving today's 4-section generation byte-identical.
+  const comparison =
+    input.vendorIds.length >= 2 ? rankVendorComparison(currentByVendor) : null;
+  const comparisonSummaries = comparison
+    ? formatVendorComparisonSummaries(comparison, input.vendorNames)
+    : null;
+
   try {
     for (let attempt = 0; attempt < MAX_NARRATIVE_ATTEMPTS; attempt += 1) {
-      const narrative = await generateReportNarrative(promptData, input.generateContent);
+      const narrative = await generateReportNarrative(promptData, input.generateContent, {
+        comparisonData: comparison ?? undefined,
+      });
       if (narrative.trim() === "") {
         console.warn(`[runReportGeneration] attempt ${attempt + 1}: model returned an empty narrative`);
         continue;
       }
-      const sections = parseNarrativeSections(narrative);
+      const sections = parseNarrativeSections(narrative, {
+        includeComparison: comparison !== null,
+      });
       if (!sections) {
         console.warn(
-          `[runReportGeneration] attempt ${attempt + 1}: narrative was not four distinct sections`
+          `[runReportGeneration] attempt ${attempt + 1}: narrative was not the expected sections`
         );
         continue;
       }
@@ -133,7 +150,18 @@ export async function runReportGeneration(input: {
         sections.pricing_analysis,
         sections.order_accuracy,
       ];
-      const numbers = validateNarrativeNumbers(sectionTexts.join("\n"), promptData);
+      const comparisonSectionTexts = comparison
+        ? [
+            sections.ai_overall_comparison,
+            sections.ai_delivery_comparison,
+            sections.ai_pricing_comparison,
+            sections.ai_order_accuracy_comparison,
+          ].filter((text): text is string => typeof text === "string")
+        : [];
+      const numbers = validateNarrativeNumbers(
+        [...sectionTexts, ...comparisonSectionTexts].join("\n"),
+        promptData
+      );
       if (!numbers.valid) {
         console.warn(
           `[runReportGeneration] attempt ${attempt + 1}: narrative number validation failed`,
@@ -141,6 +169,10 @@ export async function runReportGeneration(input: {
         );
         continue;
       }
+      // Comparison sections are explanatory trade-off commentary, not
+      // prior-period/peer-average narrative — validateNarrativeComparisons'
+      // phrase requirement doesn't fit their purpose, so it only applies to
+      // the original four, same as before this feature existed.
       const failedComparison = sectionTexts.find(
         (text) => !validateNarrativeComparisons(text).valid
       );
@@ -151,9 +183,60 @@ export async function runReportGeneration(input: {
         );
         continue;
       }
+
+      // Checks the AI-authored text only (never the code-generated leader
+      // sentence, which isn't computed yet at parse time anyway) — confirms
+      // no vendor other than the computed leader(s) is named as leading.
+      if (comparison) {
+        const subsectionChecks: [string, string | null | undefined, number[]][] = [
+          ["overall", sections.ai_overall_comparison, comparison.overallLeaders],
+          ["delivery", sections.ai_delivery_comparison, comparison.categoryLeaders.delivery],
+          ["pricing", sections.ai_pricing_comparison, comparison.categoryLeaders.pricing],
+          [
+            "orderAccuracy",
+            sections.ai_order_accuracy_comparison,
+            comparison.categoryLeaders.orderAccuracy,
+          ],
+        ];
+        const failedLeaderCheck = subsectionChecks.find(
+          ([, text, leaders]) =>
+            typeof text === "string" &&
+            !validateVendorComparisonNarrative(text, leaders, input.vendorNames).valid
+        );
+        if (failedLeaderCheck) {
+          console.warn(
+            `[runReportGeneration] attempt ${attempt + 1}: comparison narrative named a non-leader vendor as leading`,
+            { subsection: failedLeaderCheck[0], narrative }
+          );
+          continue;
+        }
+      }
+
+      const finalSections: ReportSectionInput = comparison && comparisonSummaries
+        ? {
+            vendor_summary: sections.vendor_summary,
+            delivery_performance: sections.delivery_performance,
+            pricing_analysis: sections.pricing_analysis,
+            order_accuracy: sections.order_accuracy,
+            ai_overall_comparison: `${comparisonSummaries.overall}\n\n${sections.ai_overall_comparison}`,
+            ai_delivery_comparison: `${comparisonSummaries.delivery}\n\n${sections.ai_delivery_comparison}`,
+            ai_pricing_comparison: `${comparisonSummaries.pricing}\n\n${sections.ai_pricing_comparison}`,
+            ai_order_accuracy_comparison: `${comparisonSummaries.orderAccuracy}\n\n${sections.ai_order_accuracy_comparison}`,
+          }
+        : {
+            vendor_summary: sections.vendor_summary,
+            delivery_performance: sections.delivery_performance,
+            pricing_analysis: sections.pricing_analysis,
+            order_accuracy: sections.order_accuracy,
+            ai_overall_comparison: null,
+            ai_delivery_comparison: null,
+            ai_pricing_comparison: null,
+            ai_order_accuracy_comparison: null,
+          };
+
       return {
         ok: true,
-        sections,
+        sections: finalSections,
         metrics,
       };
     }
