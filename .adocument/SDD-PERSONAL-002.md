@@ -73,7 +73,7 @@ All backend logic is implemented as Next.js API Routes rather than Server Action
 | --- | --- | --- |
 | Next.js App | Next.js 14+ (App Router), Tailwind CSS | Vendor/transaction entry UI, report generation UI, dashboard, all client-facing rendering |
 | API Routes | Next.js API Routes | CRUD for vendors/transactions, metric computation trigger, Gemini invocation, PDF/Word generation, bulk upload validation |
-| Metric Engine | Application logic (TypeScript, within API routes) | Deterministic computation of all 9 metrics; never delegated to AI |
+| Metric Engine | Application logic (TypeScript, within API routes) | Deterministic computation of all 9 metrics; never delegated to AI. Formulas, peer-average and ranking rules, and narrative validation are specified in the Metrics Reference (`.adocument/METRICS-REFERENCE.md`) |
 | AI Narrative Service | Google Gemini API (server-side call only) | Generates narrative from structured metric input; every numeric value in the output is extracted and checked against the supplied data before display — narrative containing an unmatched number is rejected and regeneration is attempted |
 | Document Export | Server-side document-generation library (no headless browser) | Produces the Finalized report as both PDF and Word (.docx), generated entirely server-side from stored content |
 | Database | Azure SQL Database (serverless) | All relational data: vendors, transactions, reports, metrics |

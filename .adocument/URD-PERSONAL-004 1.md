@@ -135,6 +135,8 @@ Priority Key: H = High (Must Have) | M = Medium (Should Have) | L = Low (Nice to
 | FR-M1-012 | A report in Draft status shall be deletable. A Finalized report shall not be deletable. | H | Developer |
 | FR-M1-013 | A report shall not be permitted to transition to Finalized status while any of its four section fields (Vendor Summary, Delivery Performance, Pricing Analysis, Order Accuracy) remain empty. | H | Technical Review |
 
+**Reference:** the calculation rules behind FR-M1-004 to FR-M1-008 and NFR-010 (metric formulas, eligible transactions, peer average, vendor ranking, and narrative validation) are documented, with a worked example, in the Metrics Reference (`.adocument/METRICS-REFERENCE.md`, also provided as PDF).
+
 
 ## 3.3 Module 2 — Vendor Scorecard Dashboard
 

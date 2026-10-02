@@ -119,6 +119,7 @@ The application is deployed to Vercel. It depends on externally hosted Azure ser
 
 - [User Requirements Document](.adocument/URD-PERSONAL-004%201.md)
 - [Software Design Document](.adocument/SDD-PERSONAL-002.md)
+- [Metrics Reference](.adocument/METRICS-REFERENCE.md) — how the nine metrics, the peer average, the vendor ranking and the narrative checks work ([PDF](.adocument/METRICS-REFERENCE.pdf))
 
 ## Project status
 
