@@ -122,4 +122,4 @@ The application is deployed to Vercel. It depends on externally hosted Azure ser
 
 ## Project status
 
-The reporting module — vendor and transaction management, report generation with the AI Comparative Analysis section, finalize/export, and the audit log — is built and covered by unit, integration, and end-to-end tests. Module 2 (an all-time, cross-report Vendor Scorecard Dashboard) is documented in the requirements but has not been started: `PRODUCT.md` lists it explicitly as out of scope for the current build, and no scorecard-related code exists in `app/`, `components/`, or `lib/`.
+The reporting module; vendor and transaction management, report generation with the AI Comparative Analysis section, finalize/export, and the audit log is built and covered by unit, integration, and end-to-end tests. Module 2 (an all-time, cross-report Vendor Scorecard Dashboard) is documented in the requirements but has not been started: `PRODUCT.md` lists it explicitly as out of scope for the current build, and no scorecard-related code exists in `app/`, `components/`, or `lib/`.

@@ -97,7 +97,7 @@ export default function AppShell({ children }: AppShellProps) {
           onToggle={toggle}
           onNavigate={() => setMenuOpen(false)}
         />
-        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:px-8 md:py-8 lg:px-12 lg:py-10">
+        <main className="relative min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:px-8 md:py-8 lg:px-12 lg:py-10">
           {requiresSignIn ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-24 text-center">
               <p className="text-sm text-foreground-muted">Sign in to view this page.</p>
