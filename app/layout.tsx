@@ -29,12 +29,30 @@ export const metadata: Metadata = {
   description: "Periodic vendor performance reports from recorded transactions.",
 };
 
+// Runs before paint, before React hydrates — reads the saved theme choice
+// (falling back to OS preference when nothing's been chosen yet) and sets
+// data-theme on <html> immediately, so there's no flash of the wrong theme.
+// Kept as a plain string, not an import, because it must execute standalone
+// in the browser before any module code runs; mirrors the same "stored
+// choice, then OS preference" logic as lib/ui/theme/themeStorage.ts.
+const SET_INITIAL_THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("theme-preference");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)}catch(e){}})();`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
       className={`${inter.variable} ${playfair.variable} h-full antialiased`}
+      // The theme script below sets data-theme on this element before React
+      // hydrates, so the server-rendered markup (which has no data-theme —
+      // the server doesn't know the client's stored preference) will always
+      // differ from the client's. That specific, expected mismatch is what
+      // this suppresses — it does not hide other hydration bugs, since it
+      // only applies to this element's own attributes, not its subtree.
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SET_INITIAL_THEME_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <MsalProviderWrapper>
           <AppShell>{children}</AppShell>

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import SignInButton from "@/components/auth/SignInButton";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 
 interface NavbarProps {
   collapsed: boolean;
@@ -56,7 +57,8 @@ export default function Navbar({ collapsed, menuOpen, onMenu }: NavbarProps) {
           Vendor Performance
         </span>
       </span>
-      <nav aria-label="Account" className="ml-auto flex h-full items-center px-4 sm:px-6 lg:px-12">
+      <nav aria-label="Account" className="ml-auto flex h-full items-center gap-2 px-4 sm:px-6 lg:px-12">
+        <ThemeToggle />
         <SignInButton />
       </nav>
     </header>

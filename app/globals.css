@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
+/* Dark mode responds to an explicit [data-theme="dark"] attribute on <html>
+   (set by the blocking script in app/layout.tsx, before paint), not just OS
+   preference — so dark: utilities work with the manual toggle. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
+  color-scheme: light;
+
   /* Neutral base. Chroma is exactly 0: pure grayscale, hue unused.
      Canvas is the page. Surface matches that near-white for panels.
      Surface-muted is the sidebar and navbar. Border is the divider. */
@@ -52,6 +59,108 @@
   --color-danger-soft: oklch(95.5% 0.02 27);
 }
 
+/* Dark mode. Same structure as :root above — one green accent, chroma-zero
+   neutrals, the same four semantic colors — with lightness inverted so the
+   same relationships hold (surface matches canvas, border separates from
+   it, subtle text recedes toward the background). accent-foreground is the
+   one relationship that genuinely flips: the dark-mode accent is a bright
+   mid-tone, so it needs dark text on it instead of light.
+   Two copies, not one: :root[data-theme="dark"] is the explicit user choice
+   (set by the blocking script in layout.tsx); the @media block is the
+   OS-follows-default for a visitor who hasn't chosen yet, and is guarded by
+   :not([data-theme="light"]) so an explicit light choice always wins over
+   a dark OS preference. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-canvas: oklch(20% 0.01 50);
+    --color-surface: oklch(20% 0.01 50);
+    --color-surface-muted: oklch(24% 0.01 50);
+    --color-border: oklch(32% 0.012 50);
+    --color-foreground: oklch(93% 0.01 50);
+    --color-foreground-muted: oklch(70% 0.014 50);
+    --color-foreground-subtle: oklch(56% 0.012 50);
+
+    --color-accent: oklch(64% 0.15 152);
+    --color-accent-hover: oklch(70% 0.15 152);
+    --color-accent-foreground: oklch(18% 0.03 152);
+    --color-accent-soft: oklch(28% 0.06 152);
+
+    --color-info: oklch(72% 0.055 188);
+    --color-info-soft: oklch(24% 0.03 188);
+
+    --color-warning: oklch(70% 0.09 75);
+    --color-warning-hover: oklch(76% 0.095 75);
+    --color-warning-muted: oklch(65% 0.065 75);
+    --color-warning-soft: oklch(26% 0.03 75);
+
+    --color-danger: oklch(68% 0.1 27);
+    --color-danger-muted: oklch(62% 0.065 27);
+    --color-danger-soft: oklch(26% 0.03 27);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-canvas: oklch(20% 0.01 50);
+  --color-surface: oklch(20% 0.01 50);
+  --color-surface-muted: oklch(24% 0.01 50);
+  --color-border: oklch(32% 0.012 50);
+  --color-foreground: oklch(93% 0.01 50);
+  --color-foreground-muted: oklch(70% 0.014 50);
+  --color-foreground-subtle: oklch(56% 0.012 50);
+
+  --color-accent: oklch(64% 0.15 152);
+  --color-accent-hover: oklch(70% 0.15 152);
+  --color-accent-foreground: oklch(18% 0.03 152);
+  --color-accent-soft: oklch(28% 0.06 152);
+
+  --color-info: oklch(72% 0.055 188);
+  --color-info-soft: oklch(24% 0.03 188);
+
+  --color-warning: oklch(70% 0.09 75);
+  --color-warning-hover: oklch(76% 0.095 75);
+  --color-warning-muted: oklch(65% 0.065 75);
+  --color-warning-soft: oklch(26% 0.03 75);
+
+  --color-danger: oklch(68% 0.1 27);
+  --color-danger-muted: oklch(62% 0.065 27);
+  --color-danger-soft: oklch(26% 0.03 27);
+}
+
+/* Not :root-scoped, unlike the two blocks above — this one has to apply at
+   any nesting depth, because it's also used to pin a subtree back to light
+   regardless of the page's theme (the signed-out landing page, which has no
+   dark design and uses --color-cream, a token that has no dark value).
+   Custom properties inherit normally, so a nearer [data-theme="light"]
+   wins over a dark value set on :root above it. */
+[data-theme="light"] {
+  color-scheme: light;
+  --color-canvas: oklch(98% 0 0);
+  --color-cream: oklch(99.2% 0.007 85);
+  --color-surface: oklch(98% 0 0);
+  --color-surface-muted: oklch(95% 0 0);
+  --color-border: oklch(88% 0 0);
+  --color-foreground: oklch(24% 0.02 50);
+  --color-foreground-muted: oklch(45% 0.016 50);
+  --color-foreground-subtle: oklch(56% 0.012 50);
+
+  --color-accent: oklch(48% 0.13 152);
+  --color-accent-hover: oklch(42% 0.135 152);
+  --color-accent-foreground: oklch(98% 0.015 152);
+  --color-accent-soft: oklch(92% 0.05 152);
+
+  --color-info: oklch(40% 0.055 188);
+  --color-info-soft: oklch(95% 0.02 188);
+
+  --color-warning: oklch(48% 0.09 75);
+  --color-warning-hover: oklch(42% 0.095 75);
+  --color-warning-muted: oklch(52% 0.065 75);
+  --color-warning-soft: oklch(95.5% 0.028 75);
+
+  --color-danger: oklch(46% 0.1 27);
+  --color-danger-muted: oklch(50% 0.065 27);
+  --color-danger-soft: oklch(95.5% 0.02 27);
+}
+
 @theme inline {
   --color-canvas: var(--color-canvas);
   --color-cream: var(--color-cream);
@@ -80,6 +189,16 @@
   --color-info-soft: var(--color-info-soft);
   --font-sans: var(--font-sans-custom);
   --font-display: var(--font-display-custom);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
 }
 
 body {
