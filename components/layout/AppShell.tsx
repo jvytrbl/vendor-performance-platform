@@ -64,7 +64,15 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   if (isSignedOutHome) {
-    return <div className="flex min-h-dvh flex-col bg-cream">{children}</div>;
+    // Pinned to light regardless of the signed-in theme preference — this
+    // page has no dark design (it uses --color-cream, which has no dark
+    // value) and the dark-mode toggle only ever appears in the signed-in
+    // navbar, so a visitor here has no way to have asked for dark anyway.
+    return (
+      <div data-theme="light" className="flex min-h-dvh flex-col bg-cream">
+        {children}
+      </div>
+    );
   }
 
   return (

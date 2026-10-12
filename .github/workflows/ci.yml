@@ -1,0 +1,29 @@
+name: CI
+
+# Fast checks only: type check and unit tests. No secrets, no Azure, no Gemini.
+# The Playwright workflow (playwright.yml) is separate and unchanged.
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - name: Install dependencies
+      run: npm ci
+    - name: Type check
+      run: npx tsc --noEmit
+    - name: Unit tests
+      run: npx vitest run
+    # Lint is intentionally not run yet: `npm run lint` currently reports
+    # 209 errors (mostly no-explicit-any). Add it here once that is cleaned up.
